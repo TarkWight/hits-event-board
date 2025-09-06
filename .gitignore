@@ -1,0 +1,17 @@
+# Cargo
+/target/
+/**/target/
+/**/*.rs.bk
+
+# Local env
+.env
+/**/.env
+
+# RustRover
+.idea/
+
+# MacOS
+.DS_Store
+
+# Logs
+.log
