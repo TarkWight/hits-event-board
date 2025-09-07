@@ -1,76 +1,49 @@
-use axum::response::IntoResponse;
-use axum::response::Response;
-use axum::Json;
-use http::StatusCode;
+use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
 use serde::Serialize;
 
-#[cfg_attr(debug_assertions, allow(dead_code))]
-#[derive(Debug)]
-pub enum AppError {
+pub type ApiResult<T> = Result<T, ApiError>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("Not implemented")]
+    NotImplemented,
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Forbidden")]
+    Forbidden,
+    #[error("Bad request: {0}")]
     BadRequest(String),
-    NotFound(String),
-    Internal(String),
+    #[error("Unprocessable entity: {0}")]
+    Unprocessable(String),
+    #[error("Conflict: {0}")]
+    Conflict(String),
+    #[error("Internal server error")]
+    Internal,
 }
 
 #[derive(Serialize)]
 struct ErrorBody<'a> {
-    error: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    details: Option<String>,
+    error: ErrorContent<'a>,
 }
 
-impl AppError {
-    #[inline]
-    pub fn bad<T: Into<String>>(msg: T) -> Self {
-        AppError::BadRequest(msg.into())
-    }
-    #[inline]
-    #[cfg_attr(debug_assertions, allow(dead_code))]
-    pub fn not_found<T: Into<String>>(msg: T) -> Self {
-        AppError::NotFound(msg.into())
-    }
-    #[inline]
-    pub fn internal<T: Into<String>>(msg: T) -> Self {
-        AppError::Internal(msg.into())
-    }
+#[derive(Serialize)]
+struct ErrorContent<'a> {
+    code: &'a str,
+    message: &'a str,
 }
 
-impl IntoResponse for AppError {
+impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        match self {
-            AppError::BadRequest(msg) => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorBody {
-                    error: "bad_request",
-                    details: Some(msg),
-                }),
-            )
-                .into_response(),
-            AppError::NotFound(msg) => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorBody {
-                    error: "not_found",
-                    details: Some(msg),
-                }),
-            )
-                .into_response(),
-            AppError::Internal(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorBody {
-                    error: "internal",
-                    details: Some(msg),
-                }),
-            )
-                .into_response(),
-        }
-    }
-}
-
-pub type AppResult<T> = Result<T, AppError>;
-
-impl From<axum::extract::rejection::QueryRejection> for AppError {
-    fn from(e: axum::extract::rejection::QueryRejection) -> Self {
-        tracing::warn!("query rejection: {e}");
-        AppError::BadRequest("invalid query parameters".into())
+        let (code, msg, http) = match &self {
+            ApiError::NotImplemented => ("NOT_IMPLEMENTED", "Not implemented", StatusCode::NOT_IMPLEMENTED),
+            ApiError::Unauthorized => ("UNAUTHORIZED", "Unauthorized", StatusCode::UNAUTHORIZED),
+            ApiError::Forbidden => ("FORBIDDEN", "Forbidden", StatusCode::FORBIDDEN),
+            ApiError::BadRequest(m) => ("BAD_REQUEST", m.as_str(), StatusCode::BAD_REQUEST),
+            ApiError::Unprocessable(m) => ("UNPROCESSABLE", m.as_str(), StatusCode::UNPROCESSABLE_ENTITY),
+            ApiError::Conflict(m) => ("CONFLICT", m.as_str(), StatusCode::CONFLICT),
+            ApiError::Internal => ("INTERNAL", "Internal server error", StatusCode::INTERNAL_SERVER_ERROR),
+        };
+        let body = ErrorBody { error: ErrorContent { code, message: msg } };
+        (http, Json(body)).into_response()
     }
 }
