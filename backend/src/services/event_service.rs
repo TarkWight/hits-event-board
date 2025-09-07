@@ -8,15 +8,13 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct EventService {
-    pool: PgPool, // Field `pool` is never read
+    pool: PgPool,
 }
 
 impl EventService {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-
-    // ========= базовые, уже используемые в main.rs =========
 
     pub async fn list_events(&self) -> AppResult<Vec<EventOut>> { // Multiple associated items are never used
         let rows = sqlx::query!(
@@ -85,7 +83,6 @@ impl EventService {
             registered_count: row.registered_count,
         })
     }
-
 
     pub async fn create_event(&self, input: CreateEventIn) -> AppResult<EventOut> {
         Self::validate_event_input(&input)?;
@@ -165,10 +162,6 @@ impl EventService {
         Ok(())
     }
 
-    // ========= «аналоги» методов из .NET репозитория =========
-
-    /// Register student to event (many-to-many).
-    /// Учитывает дедлайн и делает UPSERT (idempotent).
     pub async fn register_student_to_event(
         &self,
         event_id: Uuid,
@@ -241,7 +234,6 @@ impl EventService {
         Ok(())
     }
 
-    /// События конкретной компании (EventRow — аналог EventEntity в .NET)
     pub async fn get_events_by_company(&self, company_id: Uuid) -> AppResult<Vec<EventRow>> {
         let rows = sqlx::query_as!(
             EventRow,
@@ -263,7 +255,6 @@ impl EventService {
         Ok(rows)
     }
 
-    /// События, на которые записан студент
     pub async fn get_events_by_student(&self, student_id: Uuid) -> AppResult<Vec<EventRow>> {
         let rows = sqlx::query_as!(
             EventRow,
@@ -286,7 +277,6 @@ impl EventService {
         Ok(rows)
     }
 
-    /// Студенты, записанные на событие (минимальный профиль)
     pub async fn get_students_by_event(&self, event_id: Uuid) -> AppResult<Vec<StudentOut>> {
         let rows = sqlx::query!(
             r#"
@@ -316,7 +306,6 @@ impl EventService {
             .collect())
     }
 
-    /// Создать событие и вернуть EventRow
     pub async fn create_event_row(&self, create: CreateEventIn) -> AppResult<EventRow> {
         // Валидация на уровне Rust
         Self::validate_event_input(&create)?;
@@ -350,7 +339,6 @@ impl EventService {
         Ok(row)
     }
 
-    /// DTO-представление события (аналог GetEventDtoAsync)
     pub async fn get_event_dto(&self, event_id: Uuid) -> AppResult<EventDto> {
         let row = sqlx::query!(
             r#"
@@ -381,7 +369,6 @@ impl EventService {
         })
     }
 
-    /// Получить EventRow по id (аналог GetEventByIdAsync)
     pub async fn get_event_by_id(&self, event_id: Uuid) -> AppResult<EventRow> {
         let row = sqlx::query_as!(
             EventRow,
@@ -403,7 +390,6 @@ impl EventService {
         Ok(row)
     }
 
-    /// Частичное обновление
     pub async fn update_event(&self, id: Uuid, patch: UpdateEventIn) -> AppResult<EventRow> {
         // грузим текущее состояние
         let mut current = self.get_event_by_id(id).await?;
@@ -443,17 +429,15 @@ impl EventService {
     }
 }
 
-// ===== Лёгкие DTO под сервис (аналог .NET EventDTO/Student) =====
-
 #[derive(Debug, serde::Serialize)]
-pub struct StudentOut { // Struct `EventDto` is never constructed
+pub struct StudentOut {
     pub id: Uuid,
     pub name: String,
     pub email: String,
 }
 
 #[derive(Debug, serde::Serialize)]
-pub struct EventDto { // Struct `EventDto` is never constructed
+pub struct EventDto {
     pub title: String,
     pub short_description: Option<String>,
     pub company_id: Uuid,
