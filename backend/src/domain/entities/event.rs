@@ -1,3 +1,17 @@
+// domain event invariants
+pub struct EventInvariants;
+
+impl EventInvariants {
+    pub fn check_time_span(start: time::OffsetDateTime, end: time::OffsetDateTime) -> Result<(), &'static str> {
+        if end <= start { return Err("end_time must be after start_time"); }
+        Ok(())
+    }
+    pub fn check_deadline(deadline: time::OffsetDateTime, start: time::OffsetDateTime) -> Result<(), &'static str> {
+        if deadline > start { return Err("registration_deadline must be <= start_time"); }
+        Ok(())
+    }
+}
+
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use time::OffsetDateTime;

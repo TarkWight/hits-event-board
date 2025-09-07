@@ -16,6 +16,13 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 time = { version = "0.3", features = ["macros", "serde-human-readable"] }
 thiserror = "2.0.16"
+base64 = "0.22.1"
+pbkdf2 = "0.12.2"
+rand = "0.9.2"
+sha2 = "0.10.9"
+regex = "1.11.2"
+jsonwebtoken = "9.3.1"
+anyhow = "1.0.99"
 
 [dependencies.sqlx]
 version = "0.8.6"
