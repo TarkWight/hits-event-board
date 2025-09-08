@@ -4,11 +4,33 @@ use uuid::Uuid;
 
 use super::types::*;
 
+use sqlx::FromRow;
+use uuid::Uuid;
+use crate::domain::entities::{Company, CompanyValidationError};
+
 #[derive(Debug, Clone, FromRow)]
 pub struct CompanyRow {
     pub id: Uuid,
     pub name: String,
 }
+
+impl TryFrom<CompanyRow> for Company {
+    type Error = CompanyValidationError;
+
+    fn try_from(value: CompanyRow) -> Result<Self, Self::Error> {
+        Company::new(value.id, value.name)
+    }
+}
+
+impl From<Company> for CompanyRow {
+    fn from(domain: Company) -> Self {
+        Self {
+            id: domain.id,
+            name: domain.name,
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, FromRow)]
 struct CompanyListRow {
