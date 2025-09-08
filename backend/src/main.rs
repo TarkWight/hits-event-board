@@ -1,16 +1,16 @@
 use axum::Router;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod app;
-mod state;
-mod error;
-mod config;
-mod api;
-mod routes;
-mod middleware;
-mod domain;
-mod infra;
-mod utils;
+pub mod app;
+pub mod state;
+pub mod error;
+pub mod config;
+pub mod api;
+pub mod routes;
+pub mod middleware;
+pub mod domain;
+pub mod infra;
+pub mod utils;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
