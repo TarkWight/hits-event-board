@@ -1,4 +1,5 @@
 use uuid::Uuid;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct Company {
@@ -6,28 +7,28 @@ pub struct Company {
     pub name: String,
 }
 
-impl Company {
-    pub fn new(id: Uuid, name: String) -> Result<Self, CompanyValidationError> {
-        let c = Self { id, name };
-        c.validate()?;
-        Ok(c)
-    }
-
-    pub fn validate(&self) -> Result<(), CompanyValidationError> {
-        if self.name.trim().is_empty() {
-            return Err(CompanyValidationError::EmptyName);
-        }
-        Ok(())
-    }
-
-    pub fn rename(&mut self, new_name: String) -> Result<(), CompanyValidationError> {
-        self.name = new_name;
-        self.validate()
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum CompanyValidationError {
     #[error("company name must not be empty")]
     EmptyName,
+}
+
+impl Company {
+    pub fn new(id: Uuid, name: String) -> Result<Self, CompanyValidationError> {
+        if name.trim().is_empty() { return Err(CompanyValidationError::EmptyName); }
+        Ok(Self { id, name })
+    }
+
+    pub fn apply_name(&mut self, name: String) -> Result<(), CompanyValidationError> {
+        if name.trim().is_empty() { return Err(CompanyValidationError::EmptyName); }
+        self.name = name;
+        Ok(())
+    }
+
+    pub fn apply_update(&mut self, upd: crate::api::requests::company::UpdateCompanyIn) -> Result<(), CompanyValidationError> {
+        if let Some(name) = upd.name {
+            self.apply_name(name)?;
+        }
+        Ok(())
+    }
 }
