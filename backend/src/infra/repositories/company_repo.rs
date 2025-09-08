@@ -4,9 +4,7 @@ use uuid::Uuid;
 
 use super::types::*;
 
-use sqlx::FromRow;
-use uuid::Uuid;
-use crate::domain::entities::{Company, CompanyValidationError};
+use crate::domain::entities::company::{Company, CompanyValidationError};
 
 #[derive(Debug, Clone, FromRow)]
 pub struct CompanyRow {
