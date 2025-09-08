@@ -1,24 +1,10 @@
+use crate::domain::entities::event::EventRow;
 use async_trait::async_trait;
 use sqlx::{FromRow, Pool, Postgres};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use super::types::*;
-
-#[derive(Debug, Clone, FromRow)]
-pub struct EventRow {
-    pub id: Uuid,
-    pub company_id: Uuid,
-    pub manager_id: Uuid,
-    pub title: String,
-    pub description: Option<String>,
-    pub location: Option<String>,
-    pub starts_at: OffsetDateTime,
-    pub ends_at: Option<OffsetDateTime>,
-    pub signup_deadline: Option<OffsetDateTime>,
-    pub capacity: Option<i32>,
-    pub is_published: bool,
-}
 
 #[derive(Debug, FromRow)]
 struct EventListRow {
