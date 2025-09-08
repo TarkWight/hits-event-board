@@ -1,4 +1,5 @@
 mod event;
+mod company;
 
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
