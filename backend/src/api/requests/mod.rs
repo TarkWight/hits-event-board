@@ -1,5 +1,6 @@
-mod student_register;
-mod manager_register;
-mod login;
-mod refresh_token;
-mod company;
+pub mod company;
+pub mod event;
+pub mod manager_register;
+pub mod student_register;
+pub mod login;
+pub mod refresh_token;
