@@ -1,3 +1,5 @@
+mod event;
+
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use time::OffsetDateTime;
