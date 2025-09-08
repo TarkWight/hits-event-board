@@ -3,7 +3,7 @@ use sqlx::{Pool, Postgres};
 use crate::infra::db;
 use crate::config::Config;
 use crate::domain::services::{company_service::CompanyService, event_service::EventService};
-use crate::infra::repositories::{company_repo::PgCompanyRepository, event_repo::PgEventRepository};
+use crate::infra::repositories::{company::PgCompanyRepository, event_repo::PgEventRepository};
 
 #[derive(Clone)]
 pub struct AppState {
