@@ -2,16 +2,7 @@ use crate::api::requests::login;
 use axum::{Router, routing::post, extract::State, Json};
 use crate::{state::AppState, error::ApiResult};
 use crate::api::requests::student_register::StudentRegisterRequest;
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RegisterStudentOut {
-    id: uuid::Uuid,
-    name: String,
-    email: String,
-    role: String,
-    message: String,
-}
+use crate::api::models::auth::RegisterOut;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -21,22 +12,20 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn login(State(_st): State<AppState>, Json(_body): Json<login::LoginRequest>) -> ApiResult<Json<serde_json::Value>> {
+async fn login(State(_st): State<AppState>, Json(_body): Json<login::LoginRequest>)
+               -> ApiResult<Json<serde_json::Value>>
+{
+    // TODO: реальная аутентификация (сверка пароля, выдача токенов)
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 async fn logout() -> ApiResult<()> { Ok(()) }
 
-async fn register_student(State(st): State<AppState>, Json(body): Json<StudentRegisterRequest>)
-                          -> ApiResult<(http::StatusCode, Json<RegisterStudentOut>)>
+async fn register_student(
+    State(st): State<AppState>,
+    Json(body): Json<StudentRegisterRequest>
+) -> ApiResult<(http::StatusCode, Json<RegisterOut>)>
 {
-    let u = st.auth_service.register_student(body).await?;
-    let out = RegisterStudentOut {
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: "student".into(),
-        message: "Account created. Please confirm yourself via Telegram bot to enable full functionality.".into(),
-    };
+    let out = st.auth_service.register_student(body).await?;
     Ok((axum::http::StatusCode::CREATED, Json(out)))
 }
