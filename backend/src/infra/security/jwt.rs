@@ -54,7 +54,13 @@ pub enum TokenError {
 
 #[derive(Clone)]
 pub struct TokenService {
-    cfg: TokenConfig,
+    pub(crate) cfg: TokenConfig,
+}
+
+impl TokenService {
+    pub fn lifetime_minutes(&self) -> i64 {
+        self.cfg.lifetime_minutes
+    }
 }
 
 impl TokenService {
