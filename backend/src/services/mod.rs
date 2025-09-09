@@ -1,3 +1,5 @@
+pub mod user_service;
 pub mod event_service;
-
-pub use event_service::EventService;
+pub mod registration_service;
+pub mod company_service;
+pub mod telegram_service;

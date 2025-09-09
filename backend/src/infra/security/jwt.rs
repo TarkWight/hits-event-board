@@ -29,6 +29,7 @@ impl TokenConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct Claims {
     pub iss: String,
     pub aud: String,
@@ -36,7 +37,7 @@ pub struct Claims {
     pub iat: i64,
     pub exp: i64,
     pub jti: String,
-    // кастомные:
+    // custom
     pub user_id: Uuid,
     pub role: String,                 // "student" | "manager" | "dean"
     pub manager_status: Option<String>,

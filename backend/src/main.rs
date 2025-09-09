@@ -1,16 +1,18 @@
 use axum::Router;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod app;
-mod state;
-mod error;
-mod config;
-mod api;
-mod routes;
-mod middleware;
-mod domain;
-mod infra;
-mod utils;
+pub mod app;
+pub mod state;
+pub mod error;
+pub mod config;
+pub mod api;
+pub mod routes;
+pub mod middleware;
+pub mod domain;
+pub mod infra;
+pub mod utils;
+pub mod auth;
+pub mod services;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,12 +23,12 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = state::AppState::init().await?;
+    let cfg = config::Config::from_env();
+
+    let app_state = state::AppState::init_with(cfg.clone()).await?;
     let app: Router = app::build_router(app_state);
 
-    let host = std::env::var("APP_HOST").unwrap_or_else(|_| "127.0.0.1".into());
-    let port = std::env::var("APP_PORT").unwrap_or_else(|_| "8080".into()).parse::<u16>()?;
-    let addr = format!("{}:{}", host, port);
+    let addr = format!("{}:{}", cfg.host, cfg.port);
     tracing::info!("Listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
