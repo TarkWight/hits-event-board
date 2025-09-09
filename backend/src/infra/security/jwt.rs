@@ -29,6 +29,7 @@ impl TokenConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct Claims {
     pub iss: String,
     pub aud: String,
