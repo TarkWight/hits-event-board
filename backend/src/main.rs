@@ -11,6 +11,8 @@ pub mod middleware;
 pub mod domain;
 pub mod infra;
 pub mod utils;
+pub mod auth;
+pub mod services;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
