@@ -19,6 +19,9 @@ use crate::infra::security::jwt::{TokenConfig, TokenService};
 use crate::services::telegram_service::TelegramService;
 use crate::infra::repositories::telegram_repo::PgTelegramLinkRepository;
 
+use crate::infra::repositories::user_repo::PgUserRepository;
+use crate::services::auth_service::AuthService;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: Pool<Postgres>,
@@ -30,6 +33,8 @@ pub struct AppState {
     pub telegram:  TelegramService<PgTelegramLinkRepository>,
 
     pub auth:      AuthState,
+
+    pub auth_service: AuthService<PgUserRepository>,
 }
 
 impl AppState {
@@ -44,6 +49,8 @@ impl AppState {
 
         let telegram = TelegramService::new(PgTelegramLinkRepository::new(db.clone()));
 
+        let auth_service = AuthService::new(PgUserRepository::new(db.clone()));
+
         Ok(Self {
             db,
             config: Arc::new(config),
@@ -51,6 +58,7 @@ impl AppState {
             events,
             auth,
             telegram,
+            auth_service,
         })
     }
 
