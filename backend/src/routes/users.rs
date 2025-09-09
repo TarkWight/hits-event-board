@@ -1,8 +1,6 @@
-use axum::{Router, routing::get, routing::post, extract::{Path, Query, State}, Json};
-use serde::Deserialize;
+use axum::{Router, routing::get, routing::post, extract::{Path, State}, Json};
 use uuid::Uuid;
 use crate::{state::AppState, error::{ApiError, ApiResult}};
-use crate::api::models::{User, Paged, Meta};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -14,18 +12,14 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-#[derive(Deserialize)]
-struct ListQ { page: Option<i32>, limit: Option<i32>, q: Option<String> }
-
-async fn list_users(_st: State<AppState>, _q: Query<ListQ>) -> Json<Paged<User>> {
-    let data = vec![];
-    Json(Paged { data, meta: Meta { page: 1, limit: 20, total: 0 } })
+async fn list_users(_st: State<AppState>) -> ApiResult<Json<serde_json::Value>> {
+    Err(ApiError::NotImplemented)
 }
 
-async fn approve_user(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<()> {
-    st.users.approve(id, Uuid::nil()).await?;
-    Ok(())
+async fn approve_user(_st: State<AppState>, _id: Path<Uuid>) -> ApiResult<()> {
+    Err(ApiError::NotImplemented)
 }
-async fn reject_user(Path(_id): Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
-async fn block_user(Path(_id): Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
-async fn unblock_user(Path(_id): Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
+
+async fn reject_user(_id: Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
+async fn block_user(_id: Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
+async fn unblock_user(_id: Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
