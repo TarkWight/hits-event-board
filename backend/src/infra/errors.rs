@@ -10,7 +10,6 @@ pub enum RepoError {
     #[error("conflict: {0}")]
     Conflict(String),
 
-    /// Бизнес-предусловия/инварианты нарушены (например, дедлайн прошёл, нет мест и т.п.)
     #[error("precondition failed: {0}")]
     Precondition(String),
 
@@ -18,7 +17,6 @@ pub enum RepoError {
     Db(#[from] sqlx::Error),
 }
 
-/// Утилита: извлечь имя уникального ограничения из sqlx::Error
 pub fn is_unique_violation(e: &sqlx::Error) -> Option<String> {
     match e {
         sqlx::Error::Database(db) if db.kind() == sqlx::error::ErrorKind::UniqueViolation => {
