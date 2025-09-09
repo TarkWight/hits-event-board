@@ -1,10 +1,18 @@
-use axum::{Router, routing::get, Json, extract::State};
-use uuid::Uuid;
-use time::OffsetDateTime;
-use crate::{state::AppState, error::ApiResult};
-use crate::api::models::{User, Role, UserStatus};
+use axum::{Router, routing::get, Json};
+use crate::error::ApiResult;
+use crate::auth::extractor::{AuthUser, Role, ManagerStatus};
 
-pub fn router(state: AppState) -> Router {
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MeOut {
+    user_id: uuid::Uuid,
+    role: Role,
+    manager_status: Option<ManagerStatus>,
+    company_id: Option<uuid::Uuid>,
+    email: String,
+}
+
+pub fn router(state: crate::state::AppState) -> Router {
     Router::new()
         .route("/api/v1/me", get(me))
         .route("/api/v1/me/google/connect", axum::routing::post(google_connect))
@@ -12,21 +20,18 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn me() -> ApiResult<Json<User>> {
-    let u = User {
-        id: Uuid::new_v4(),
-        role: Role::Student,
-        status: UserStatus::Approved,
-        email: Some("student@example.com".into()),
-        full_name: Some("Student Sample".into()),
-        telegram_user_id: None,
-        approved_by: None,
-        created_at: OffsetDateTime::now_utc(),
-        updated_at: OffsetDateTime::now_utc(),
+async fn me(user: AuthUser) -> ApiResult<Json<MeOut>> {
+    let out = MeOut {
+        user_id: user.user_id,
+        role: user.role,
+        manager_status: user.manager_status,
+        company_id: user.company_id,
+        email: user.raw.sub.clone(),
     };
-    Ok(Json(u))
+    Ok(Json(out))
 }
 
+// todo: added impl
 async fn google_connect() -> ApiResult<Json<serde_json::Value>> {
     Ok(Json(serde_json::json!({ "redirect_url": "https://accounts.google.com/o/oauth2/v2/auth?..." })))
 }
