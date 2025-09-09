@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 teloxide = { version = "0.12", features = ["macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 dotenvy = "0.15"
 anyhow = "1"
+serde = { version = "1.0.219", features = ["derive"] }

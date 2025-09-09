@@ -243,6 +243,7 @@ dependencies = [
  "anyhow",
  "dotenvy",
  "reqwest 0.12.23",
+ "serde",
  "teloxide",
  "tokio",
 ]
