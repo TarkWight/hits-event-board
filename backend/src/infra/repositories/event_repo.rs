@@ -221,7 +221,6 @@ impl EventRepository for PgEventRepository {
     }
 
     async fn register(&self, event_id: Uuid, student_id: Uuid, now_utc: OffsetDateTime) -> RepoResult<()> {
-        // простая upsert-семантика: если уже есть — ничего не делаем, иначе вставка
         let _ = sqlx::query!(
             r#"
             INSERT INTO registrations (event_id, student_id, registered_at)
