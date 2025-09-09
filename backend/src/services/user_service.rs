@@ -8,7 +8,7 @@ pub struct UserService<R: UserRepository + Send + Sync + 'static> { repo: R }
 impl<R: UserRepository + Send + Sync + 'static> UserService<R> {
     pub fn new(repo: R) -> Self { Self { repo } }
     pub async fn approve(&self, user_id: Uuid, approver_id: Uuid) -> ApiResult<()> {
-        self.repo.approve_user(user_id, approver_id).await?;
+        let x = self.repo.approve_user(user_id, approver_id).await?;
         Ok(())
     }
 }
