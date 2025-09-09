@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use sqlx::{Pool, Postgres, FromRow};
+use time::OffsetDateTime;
 use uuid::Uuid;
 use crate::infra::errors::{RepoError, RepoResult};
 
@@ -41,6 +42,14 @@ pub trait UserRepository {
         email: &str,
         password_hash: &str,
     ) -> RepoResult<UserRow>;
+
+    /// Сохранить refresh-токен для пользователя.
+    async fn set_refresh_token(
+        &self,
+        user_id: Uuid,
+        refresh_hash: &str,
+        expires_at: OffsetDateTime,
+    ) -> RepoResult<()>;
 }
 
 #[derive(Clone)]
@@ -64,7 +73,7 @@ impl UserRepository for PgUserRepository {
         password_hash: &str,
         role: UserRole,
     ) -> RepoResult<UserRow> {
-        let res = sqlx::query_as!(
+        let res = sqlx::query_as!( 
             UserRow,
             r#"
             INSERT INTO users (id, name, email, password_hash, role)
@@ -171,5 +180,32 @@ impl UserRepository for PgUserRepository {
 
         tx.commit().await?;
         Ok(user)
+    }
+
+    async fn set_refresh_token(
+        &self,
+        user_id: Uuid,
+        refresh_hash: &str,
+        expires_at: OffsetDateTime,
+    ) -> RepoResult<()> {
+        let res = sqlx::query!(
+            r#"
+            UPDATE users
+               SET refresh_token_hash = $2,
+                   refresh_token_expiration = $3,
+                   updated_at = now()
+             WHERE id = $1
+            "#,
+            user_id,
+            refresh_hash,
+            expires_at
+        )
+            .execute(&self.pool)
+            .await?;
+
+        if res.rows_affected() == 0 {
+            return Err(RepoError::NotFound);
+        }
+        Ok(())
     }
 }
