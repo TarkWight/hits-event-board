@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Company {
@@ -15,18 +15,29 @@ pub enum CompanyValidationError {
 
 impl Company {
     pub fn new(id: Uuid, name: String) -> Result<Self, CompanyValidationError> {
-        if name.trim().is_empty() { return Err(CompanyValidationError::EmptyName); }
+        if name.trim().is_empty() {
+            return Err(CompanyValidationError::EmptyName);
+        }
         Ok(Self { id, name })
     }
 
     pub fn apply_name(&mut self, name: String) -> Result<(), CompanyValidationError> {
-        if name.trim().is_empty() { return Err(CompanyValidationError::EmptyName); }
+        if name.trim().is_empty() {
+            return Err(CompanyValidationError::EmptyName);
+        }
         self.name = name;
         Ok(())
     }
+}
 
-    pub fn apply_update(&mut self, upd: crate::api::requests::company::UpdateCompanyIn) -> Result<(), CompanyValidationError> {
-        if let Some(name) = upd.name {
+#[derive(Debug, Default, Clone)]
+pub struct CompanyPatch {
+    pub name: Option<String>,
+}
+
+impl Company {
+    pub fn apply(&mut self, patch: CompanyPatch) -> Result<(), CompanyValidationError> {
+        if let Some(name) = patch.name {
             self.apply_name(name)?;
         }
         Ok(())
