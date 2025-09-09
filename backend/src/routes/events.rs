@@ -1,9 +1,18 @@
-use axum::{Router, routing::{get, post, patch, delete}, extract::{Path, Query, State}, Json};
-use uuid::Uuid;
+use axum::{
+    Router,
+    routing::{get, post, patch, delete},
+    extract::{Path, Query, State},
+    Json,
+};
 use serde::Deserialize;
-use crate::{state::AppState, error::{ApiError, ApiResult}};
-use crate::api::models::{Event, Paged, Meta, Registration};
-use crate::infra::repositories::event_repo::{EventCreate, EventUpdate};
+use time::OffsetDateTime;
+use uuid::Uuid;
+
+use crate::state::AppState;
+use crate::api::models::event::EventOut;
+use crate::api::requests::event::{CreateEventIn, UpdateEventIn};
+use crate::infra::repositories::event_repo::EventListFilter;
+use crate::error::ApiResult;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -19,26 +28,91 @@ pub fn router(state: AppState) -> Router {
 }
 
 #[derive(Deserialize)]
-struct ListQ { page: Option<i32>, limit: Option<i32> }
-
-async fn list_events(State(st): State<AppState>, q: Query<ListQ>) -> Json<Paged<Event>> {
-    let data = st.events.list(q.page.unwrap_or(1), q.limit.unwrap_or(20)).await.unwrap_or_default();
-    Json(Paged { data, meta: Meta { page: q.page.unwrap_or(1), limit: q.limit.unwrap_or(20), total: 0 } })
+struct ListQ {
+    page: Option<i32>, limit: Option<i32>, q: Option<String>,
+    company_id: Option<Uuid>, manager_id: Option<Uuid>, published: Option<bool>,
+    #[serde(with = "time::serde::rfc3339::option")] from: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")] to: Option<OffsetDateTime>,
 }
 
-async fn create_event(State(st): State<AppState>, Json(body): Json<EventCreate>) -> (axum::http::StatusCode, Json<Event>) {
-    let created = st.events.create(body, Uuid::nil()).await.expect("todo");
-    (axum::http::StatusCode::CREATED, Json(created))
+async fn list_events(State(st): State<AppState>, q: Query<ListQ>) -> ApiResult<Json<Vec<EventOut>>> {
+    let f = EventListFilter {
+        company_id: q.company_id,
+        manager_id: q.manager_id,
+        published: q.published,
+        q: q.q.clone(),
+        from: q.from,
+        to: q.to,
+    };
+    Ok(Json(st.events.list(q.page.unwrap_or(1), q.limit.unwrap_or(20), f).await?))
 }
 
-async fn get_event(Path(_id): Path<Uuid>) -> ApiResult<Json<Event>> { Err(ApiError::NotImplemented) }
-async fn update_event(State(st): State<AppState>, Path(id): Path<Uuid>, Json(body): Json<EventUpdate>) -> ApiResult<Json<Event>> { Ok(Json(st.events.update(id, body).await.expect("todo"))) }
-async fn delete_event(Path(_id): Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
+async fn create_event(State(st): State<AppState>, Json(body): Json<CreateEventIn>)
+                      -> ApiResult<(axum::http::StatusCode, Json<EventOut>)>
+{
+    let e = st.events.create(body, Uuid::nil()).await?;
+    Ok((axum::http::StatusCode::CREATED, Json(e)))
+}
 
-async fn publish_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<()> { st.events.publish(id, Uuid::nil()).await?; Ok(()) }
-async fn unpublish_event(Path(_id): Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
-async fn update_deadline(Path(_id): Path<Uuid>, Json(_body): Json<serde_json::Value>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
+async fn get_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<Json<EventOut>> {
+    Ok(Json(st.events.get(id).await?))
+}
 
-async fn list_registrations(Path(_id): Path<Uuid>) -> ApiResult<Json<Vec<Registration>>> { Err(ApiError::NotImplemented) }
-async fn register_event(Path(_id): Path<Uuid>, Json(_body): Json<serde_json::Value>) -> ApiResult<Json<Registration>> { Err(ApiError::NotImplemented) }
-async fn cancel_registration(Path(_id): Path<Uuid>) -> ApiResult<()> { Err(ApiError::NotImplemented) }
+async fn update_event(State(st): State<AppState>, Path(id): Path<Uuid>, Json(body): Json<UpdateEventIn>)
+                      -> ApiResult<Json<EventOut>>
+{
+    Ok(Json(st.events.update(id, body).await?))
+}
+
+async fn delete_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<()> {
+    st.events.delete(id).await
+}
+
+#[derive(serde::Deserialize)]
+struct DeadlineIn {
+    #[serde(with = "time::serde::rfc3339::option")]
+    deadline: Option<OffsetDateTime>,
+}
+
+async fn publish_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<Json<EventOut>> {
+    Ok(Json(st.events.set_published(id, true).await?))
+}
+
+async fn unpublish_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<Json<EventOut>> {
+    Ok(Json(st.events.set_published(id, false).await?))
+}
+
+async fn update_deadline(State(st): State<AppState>, Path(id): Path<Uuid>, Json(body): Json<DeadlineIn>)
+                         -> ApiResult<Json<EventOut>>
+{
+    Ok(Json(st.events.set_deadline(id, body.deadline).await?))
+}
+
+#[derive(serde::Serialize)]
+pub struct RegistrationOut {
+    pub student_id: Uuid,
+    #[serde(with = "time::serde::rfc3339")]
+    pub registered_at: OffsetDateTime,
+}
+
+async fn list_registrations(State(st): State<AppState>, Path(event_id): Path<Uuid>)
+                            -> ApiResult<Json<Vec<RegistrationOut>>>
+{
+    let rows = st.events.list_registrations(event_id).await?;
+    Ok(Json(rows))
+}
+
+#[derive(serde::Deserialize)]
+struct RegisterIn { student_id: Uuid }
+
+async fn register_event(State(st): State<AppState>, Path(event_id): Path<Uuid>, Json(body): Json<RegisterIn>)
+                        -> ApiResult<()>
+{
+    st.events.register(event_id, body.student_id).await
+}
+
+async fn cancel_registration(State(st): State<AppState>, Path(event_id): Path<Uuid>, Json(body): Json<RegisterIn>)
+                             -> ApiResult<()>
+{
+    st.events.cancel_registration(event_id, body.student_id).await
+}
