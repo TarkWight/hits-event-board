@@ -1,7 +1,6 @@
 use axum::{Router, routing::post, Json, extract::State};
 use crate::{state::AppState, error::ApiResult};
-use crate::api::requests::LoginRequest;
-use crate::infra::security::jwt;
+use crate::api::requests::login::LoginRequest;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -11,7 +10,6 @@ pub fn router(state: AppState) -> Router {
 }
 
 async fn login(State(_st): State<AppState>, Json(_body): Json<LoginRequest>) -> ApiResult<Json<serde_json::Value>> {
-    let _token_example = jwt::encode_demo()?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
