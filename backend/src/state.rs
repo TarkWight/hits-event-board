@@ -16,11 +16,14 @@ use crate::services::{
 use crate::auth::extractor::AuthState;
 use crate::infra::security::jwt::{TokenConfig, TokenService};
 
-use crate::services::telegram_service::TelegramService;
-use crate::infra::repositories::telegram_repo::PgTelegramLinkRepository;
-
 use crate::infra::repositories::user_repo::PgUserRepository;
 use crate::services::auth_service::AuthService;
+
+use crate::services::telegram_service::TelegramService;
+
+use crate::infra::repositories::telegram_repo::PgTelegramLinkRepository;
+use crate::infra::repositories::telegram_code_repo::PgTelegramCodeRepository;
+
 
 #[derive(Clone)]
 pub struct AppState {
@@ -30,7 +33,7 @@ pub struct AppState {
     pub companies: CompanyService<PgCompanyRepository>,
     pub events:    EventService<PgEventRepository>,
 
-    pub telegram:  TelegramService<PgTelegramLinkRepository>,
+    pub telegram:   TelegramService<PgTelegramLinkRepository, PgTelegramCodeRepository>,
 
     pub auth:      AuthState,
 
@@ -47,7 +50,9 @@ impl AppState {
         let token_service = TokenService::new(TokenConfig::from_env());
         let auth = AuthState { token_service };
 
-        let telegram = TelegramService::new(PgTelegramLinkRepository::new(db.clone()));
+        let tg_links = PgTelegramLinkRepository::new(db.clone());
+        let tg_codes = PgTelegramCodeRepository::new(db.clone());
+        let telegram = TelegramService::new(tg_links, tg_codes, config.telegram_code_ttl);
 
         let auth_service = AuthService::new(PgUserRepository::new(db.clone()));
 

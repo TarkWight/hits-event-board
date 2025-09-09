@@ -6,6 +6,7 @@ pub struct Config {
     pub port: u16,
 
     pub database_url: String,
+    pub telegram_code_ttl: i64,
 
     pub jwt_secret: String,
     pub google_client_id: String,
@@ -30,6 +31,11 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/tsu_hits_events".into());
 
+        let telegram_code_ttl = env::var("TELEGRAM_CODE_TTL_MINUTES")
+            .ok()
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(10);
+
         let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret-change-me".into());
         let google_client_id = env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
         let google_client_secret = env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default();
@@ -39,6 +45,7 @@ impl Config {
             host,
             port,
             database_url,
+            telegram_code_ttl,
             jwt_secret,
             google_client_id,
             google_client_secret,
