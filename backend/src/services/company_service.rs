@@ -2,8 +2,8 @@ use uuid::Uuid;
 
 use crate::api::models::company::CompanyOut;
 use crate::api::requests::company::{CreateCompanyIn, UpdateCompanyIn};
+use crate::domain::entities::company::CompanyWithCounts;
 use crate::domain::entities::company_row::CompanyRow;
-use crate::domain::mappers::company::{CompanyWithCounts};
 use crate::infra::repositories::company::CompanyRepository;
 use crate::error::ApiResult;
 
@@ -21,9 +21,13 @@ impl<R: CompanyRepository + Send + Sync + 'static> CompanyService<R> {
     }
 
     pub async fn create(&self, payload: CreateCompanyIn, _creator: Uuid) -> ApiResult<CompanyOut> {
-        let row: CompanyRow = CompanyRow::try_from(payload)?;
+        let row: CompanyRow = payload.try_into()?;
+
         let created = self.repo.create(row).await?;
-        Ok(CompanyOut::from(created))
+
+        let full = self.repo.get(created.id).await?;
+
+        Ok(full.into())
     }
 
     pub async fn get(&self, id: Uuid) -> ApiResult<CompanyOut> {
