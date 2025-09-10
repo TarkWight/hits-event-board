@@ -1,28 +1,44 @@
 use uuid::Uuid;
+
+use crate::error::{ApiError, ApiResult};
 use crate::auth::extractor::{AuthUser, Role, ManagerStatus};
-use crate::error::ApiError;
 
-impl AuthUser {
-    #[inline] pub fn is_dean(&self) -> bool { self.role == Role::Dean }
-
-    #[inline]
-    pub fn is_manager_confirmed_for(&self, company_id: Uuid) -> bool {
-        self.role == Role::Manager
-            && self.company_id == Some(company_id)
-            && self.manager_status == Some(ManagerStatus::Confirmed)
+#[inline]
+pub fn require_role(user: &AuthUser, allowed: &[Role]) -> ApiResult<()> {
+    if allowed.iter().any(|r| *r == user.role) {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden)
     }
+}
 
-    #[inline]
-    pub fn require_dean(&self) -> Result<(), ApiError> {
-        if self.is_dean() { Ok(()) } else { Err(ApiError::Forbidden) }
-    }
+#[inline]
+pub fn require_dean(user: &AuthUser) -> ApiResult<()> {
+    require_role(user, &[Role::Dean])
+}
 
-    #[inline]
-    pub fn require_dean_or_confirmed_manager_of(&self, company_id: Uuid) -> Result<(), ApiError> {
-        if self.is_dean() || self.is_manager_confirmed_for(company_id) {
-            Ok(())
-        } else {
-            Err(ApiError::Forbidden)
-        }
+#[inline]
+pub fn require_manager_confirmed(user: &AuthUser) -> ApiResult<()> {
+    match (user.role, user.manager_status) {
+        (Role::Dean, _) => Ok(()),
+        (Role::Manager, Some(ManagerStatus::Confirmed)) => Ok(()),
+        _ => Err(ApiError::Forbidden),
     }
+}
+
+#[inline]
+pub fn require_manager_confirmed_of_company(user: &AuthUser, company_id: Uuid) -> ApiResult<()> {
+    match (user.role, user.manager_status, user.company_id) {
+        (Role::Dean, _, _) => Ok(()),
+        (Role::Manager, Some(ManagerStatus::Confirmed), Some(cid)) if cid == company_id => Ok(()),
+        _ => Err(ApiError::Forbidden),
+    }
+}
+
+#[inline]
+pub fn require_dean_or_company_manager(user: &AuthUser, company_id: Uuid) -> ApiResult<()> {
+    if user.role == Role::Dean {
+        return Ok(());
+    }
+    require_manager_confirmed_of_company(user, company_id)
 }
