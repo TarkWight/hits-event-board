@@ -1,17 +1,17 @@
 use axum::{Router, routing::{get, post, delete}, Json};
 use crate::error::ApiResult;
 use crate::auth::extractor::AuthUser;
-use crate::auth::roles::{ManagerStatus, Role};
+use crate::auth::roles::{ManagerStatus, UserRole, StudentStatus};
 use crate::state::AppState;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 struct MeOut {
     user_id: uuid::Uuid,
-    role: Role,
+    role: UserRole,
     manager_status: Option<ManagerStatus>,
     company_id: Option<uuid::Uuid>,
-    student_confirmed: Option<bool>,
+    student_status: Option<StudentStatus>,
     email: String,
 }
 
@@ -29,7 +29,7 @@ async fn me(user: AuthUser) -> ApiResult<Json<MeOut>> {
         role: user.role,
         manager_status: user.manager_status,
         company_id: user.company_id,
-        student_confirmed: user.student_confirmed,
+        student_status: user.student_status,
         email: user.raw.sub.clone(),
     };
     Ok(Json(out))
