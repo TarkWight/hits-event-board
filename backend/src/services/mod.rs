@@ -4,3 +4,4 @@ pub mod registration_service;
 pub mod company_service;
 pub mod telegram_service;
 pub mod auth_service;
+pub mod manager_service;
