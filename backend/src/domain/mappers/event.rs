@@ -1,17 +1,37 @@
 use uuid::Uuid;
+use time::OffsetDateTime;
 
 use crate::api::models::event::EventOut;
 use crate::api::requests::event::CreateEventIn;
 use crate::domain::entities::event::{Event, EventValidationError};
 use crate::domain::entities::event_row::EventRow;
 
-impl TryFrom<CreateEventIn> for EventRow {
-    type Error = EventValidationError;
-    fn try_from(v: CreateEventIn) -> Result<Self, Self::Error> {
-        let d = Event::from(v);
-        Ok(d.into())
+impl EventRow {
+    pub fn from_manager_input(
+        input: CreateEventIn,
+        company_id: Uuid,
+        manager_id: Uuid,
+    ) -> Result<Self, EventValidationError> {
+        let e = Event::new(
+            Uuid::new_v4(),
+            company_id,
+            manager_id,
+            input.title,
+            input.short_desc,
+            input.location,
+            input.starts_at,
+            input.ends_at,
+            input.signup_deadline,
+            input.capacity,
+            input.is_published.unwrap_or(false),
+        )?;
+        Ok(e.into())
     }
 }
+
+// УБРАНО:
+// impl TryFrom<CreateEventIn> for EventRow { ... } — больше не используем,
+// т.к. company_id/manager_id берём из JWT, а не из тела запроса.
 
 pub struct EventWithCount {
     pub id: Uuid,
@@ -20,9 +40,9 @@ pub struct EventWithCount {
     pub title: String,
     pub description: Option<String>,
     pub location: Option<String>,
-    pub starts_at: time::OffsetDateTime,
-    pub ends_at: Option<time::OffsetDateTime>,
-    pub signup_deadline: Option<time::OffsetDateTime>,
+    pub starts_at: OffsetDateTime,
+    pub ends_at: Option<OffsetDateTime>,
+    pub signup_deadline: Option<OffsetDateTime>,
     pub capacity: Option<i32>,
     pub is_published: bool,
     pub registered_count: Option<i64>,
