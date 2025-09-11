@@ -1,0 +1,21 @@
+:root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --fg:#e5e7eb; --acc:#22d3ee; }
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto}
+.container{max-width:1100px;margin:0 auto;padding:24px}
+.card{background:var(--card);border:1px solid #1f2937;border-radius:12px;padding:16px;margin:12px 0}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+input,select,button,textarea{background:#0b1220;border:1px solid #1f2937;color:var(--fg);padding:10px;border-radius:8px}
+button{cursor:pointer} button.primary{background:var(--acc);color:#0b1220;border:none}
+nav.tabs{display:flex;gap:10px;margin-bottom:16px}
+nav.tabs a{padding:10px 12px;border-radius:8px;background:#0b1220;border:1px solid #1f2937;text-decoration:none;color:var(--fg)}
+nav.tabs a.active{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{padding:10px;border-bottom:1px solid #1f2937;vertical-align:top}
+.badge{padding:2px 8px;border-radius:999px;background:#1f2937;color:var(--muted)}
+.badge.ok{background:#062e2b;color:#88f0de}
+.badge.warn{background:#382404;color:#ffd28a}
+.badge.err{background:#3a0a0a;color:#ff9aa2}
+.toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.hidden{display:none}
+.right{margin-left:auto}
+hr{border:0;border-top:1px solid #1f2937;margin:16px 0}
+pre{background:#0b1220;border:1px solid #1f2937;border-radius:8px;padding:12px;overflow:auto}
