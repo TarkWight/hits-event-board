@@ -4,7 +4,7 @@ use axum::{
     http::request::Parts,
 };
 use uuid::Uuid;
-use crate::auth::roles::{ManagerStatus, Role};
+use crate::auth::roles::{ManagerStatus, UserRole, StudentStatus};
 use crate::error::ApiError;
 use crate::infra::security::jwt::{Claims, TokenService};
 use crate::state::AppState;
@@ -12,10 +12,10 @@ use crate::state::AppState;
 #[derive(Debug, Clone)]
 pub struct AuthUser {
     pub user_id: Uuid,
-    pub role: Role,
+    pub role: UserRole,
     pub manager_status: Option<ManagerStatus>,
     pub company_id: Option<Uuid>,
-    pub student_confirmed: Option<bool>,
+    pub student_status: Option<StudentStatus>,
     pub raw: Claims,
 }
 
@@ -42,9 +42,9 @@ impl FromRequestParts<AppState> for AuthUser {
             .map_err(|_| ApiError::Unauthorized)?;
 
         let role = match claims.role.as_str() {
-            "student" => Role::Student,
-            "manager" => Role::Manager,
-            "dean"    => Role::Dean,
+            "student" => UserRole::Student,
+            "manager" => UserRole::Manager,
+            "dean"    => UserRole::Dean,
             _ => return Err(ApiError::Forbidden),
         };
 
@@ -55,8 +55,14 @@ impl FromRequestParts<AppState> for AuthUser {
             _ => ManagerStatus::Rejected,
         });
 
-        let student_confirmed: Option<bool> = match role {
-            Role::Student => Some(claims.student_confirmed.unwrap_or(false)),
+        let student_status: Option<StudentStatus> = match role {
+            UserRole::Student => claims.student_status.as_deref().map(|s| match s {
+                "created"  => StudentStatus::Created,
+                "linked"   => StudentStatus::Linked,
+                "confirmed" => StudentStatus::Confirmed,
+                "rejected" => StudentStatus::Rejected,
+                _          => StudentStatus::Created,
+            }),
             _ => None,
         };
 
@@ -65,7 +71,7 @@ impl FromRequestParts<AppState> for AuthUser {
             role,
             manager_status,
             company_id: claims.company_id,
-            student_confirmed,
+            student_status,
             raw: claims,
         })
     }
