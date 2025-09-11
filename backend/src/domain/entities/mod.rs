@@ -7,4 +7,6 @@ pub mod event_row;
 pub mod registration_row;
 pub mod manager;
 pub mod manager_row;
+pub mod student_row;
+pub mod user_row;
 
