@@ -1,17 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Login</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="utf-8"/>
+    <title>Вход — Admin</title>
+    <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
-<h2>Login</h2>
-<input id="email" type="email" placeholder="Email">
-<input id="password" type="password" placeholder="Password">
-<button onclick="login()">Login</button>
+<div class="container">
+    <h1>Вход (деканат)</h1>
+    <div class="card">
+        <form id="loginForm" class="row" onsubmit="return false;">
+            <input type="email" id="email" placeholder="email" required style="min-width:280px"/>
+            <input type="password" id="password" placeholder="пароль" required style="min-width:200px"/>
+            <button class="primary" id="btnLogin">Войти</button>
+        </form>
+        <div id="loginError" class="badge err hidden"></div>
+    </div>
+    <pre id="debug" class="hidden"></pre>
+</div>
 
-<div id="result"></div>
-<script src="main.js"></script>
+<script src="/app.js"></script>
+<script>
+    const form = document.getElementById('loginForm');
+    const err = document.getElementById('loginError');
+    const dbg = document.getElementById('debug');
+
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+        err.classList.add('hidden'); err.textContent='';
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        log('➡️ POST /api/v1/auth/login', {email});
+        const r = await api('/api/v1/auth/login', {
+            method:'POST',
+            body: JSON.stringify({email,password}),
+            requireAuth:false
+        });
+        if(!r.ok){
+            err.textContent = 'Ошибка входа';
+            err.classList.remove('hidden');
+            log('⛔ login error', r);
+            return;
+        }
+        const data = await r.json();
+        saveTokens(data.tokens);
+        log('✅ logged in', data);
+
+        // быстрый sanity check me
+        const meR = await api('/api/v1/me');
+        log('GET /me', await meR.json());
+
+        location.href = '/admin.html';
+    });
+
+    function log(title, payload){ dbg.classList.remove('hidden'); dbg.textContent += title + '\n' + JSON.stringify(payload,null,2) + '\n\n'; }
+</script>
 </body>
 </html>
