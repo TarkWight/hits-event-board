@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, post, patch, delete},
+    routing::{get, post},
     extract::{Path, Query, State},
     Json,
 };
@@ -12,6 +12,9 @@ use crate::state::AppState;
 use crate::api::models::event::EventOut;
 use crate::api::requests::event::{CreateEventIn, UpdateEventIn};
 use crate::infra::repositories::event_repo::EventListFilter;
+use crate::infra::security::rbac;
+use crate::auth::extractor::AuthUser;
+use crate::auth::roles::{ManagerStatus, Role};
 use crate::error::ApiResult;
 
 pub fn router(state: AppState) -> Router {
@@ -29,14 +32,23 @@ pub fn router(state: AppState) -> Router {
 
 #[derive(Deserialize)]
 struct ListQ {
-    page: Option<i32>, limit: Option<i32>, q: Option<String>,
-    company_id: Option<Uuid>, manager_id: Option<Uuid>, published: Option<bool>,
+    page: Option<i32>,
+    limit: Option<i32>,
+    q: Option<String>,
+    company_id: Option<Uuid>,
+    manager_id: Option<Uuid>,
+    published: Option<bool>,
     #[serde(with = "time::serde::rfc3339::option")] from: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")] to: Option<OffsetDateTime>,
 }
 
-async fn list_events(State(st): State<AppState>, q: Query<ListQ>) -> ApiResult<Json<Vec<EventOut>>> {
-    let f = EventListFilter {
+
+async fn list_events(
+    State(st): State<AppState>,
+    user: Option<AuthUser>,
+    q: Query<ListQ>,
+) -> ApiResult<Json<Vec<EventOut>>> {
+    let mut f = EventListFilter {
         company_id: q.company_id,
         manager_id: q.manager_id,
         published: q.published,
@@ -44,27 +56,78 @@ async fn list_events(State(st): State<AppState>, q: Query<ListQ>) -> ApiResult<J
         from: q.from,
         to: q.to,
     };
-    Ok(Json(st.events.list(q.page.unwrap_or(1), q.limit.unwrap_or(20), f).await?))
+
+    if let Some(company_id) = f.company_id {
+        if let Some(u) = &user {
+            let is_allowed = u.role == Role::Dean
+                || (u.role == Role::Manager
+                && u.company_id == Some(company_id)
+                && matches!(u.manager_status, Some(ManagerStatus::Confirmed)));
+            if !is_allowed {
+                f.published = Some(true);
+            }
+        } else {
+            f.published = Some(true);
+        }
+    } else {
+        if user.is_none() {
+            f.published = Some(true);
+        }
+    }
+
+    let page = q.page.unwrap_or(1);
+    let limit = q.limit.unwrap_or(20);
+    Ok(Json(st.events.list(page, limit, f).await?))
 }
 
-async fn create_event(State(st): State<AppState>, Json(body): Json<CreateEventIn>)
-                      -> ApiResult<(axum::http::StatusCode, Json<EventOut>)>
-{
-    let e = st.events.create(body, Uuid::nil()).await?;
-    Ok((axum::http::StatusCode::CREATED, Json(e)))
+async fn create_event(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<CreateEventIn>,
+) -> ApiResult<(http::StatusCode, Json<EventOut>)> {
+    rbac::require_manager_confirmed(&user)?;
+
+    let company_id = user.company_id.ok_or(crate::error::ApiError::Forbidden)?;
+    let manager_id = user.user_id;
+
+    let e = st.events.create(body, company_id, manager_id).await?;
+    Ok((http::StatusCode::CREATED, Json(e)))
 }
 
-async fn get_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<Json<EventOut>> {
-    Ok(Json(st.events.get(id).await?))
+async fn get_event(State(st): State<AppState>, user: Option<AuthUser>, Path(id): Path<Uuid>)
+                   -> ApiResult<Json<EventOut>> {
+    let e = st.events.get(id).await?;
+
+    if !e.is_published {
+        if let Some(u) = user {
+            let allowed = u.role == Role::Dean
+                || (u.role == Role::Manager
+                && u.company_id == Some(e.company_id)
+                && matches!(u.manager_status, Some(ManagerStatus::Confirmed)));
+            if !allowed {
+                return Err(crate::error::ApiError::Forbidden);
+            }
+        } else {
+            return Err(crate::error::ApiError::Forbidden);
+        }
+    }
+    Ok(Json(e))
 }
 
-async fn update_event(State(st): State<AppState>, Path(id): Path<Uuid>, Json(body): Json<UpdateEventIn>)
-                      -> ApiResult<Json<EventOut>>
-{
+async fn update_event(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateEventIn>,
+) -> ApiResult<Json<EventOut>> {
+    let e = st.events.get(id).await?;
+    rbac::require_dean_or_company_manager(&user, e.company_id)?;
     Ok(Json(st.events.update(id, body).await?))
 }
 
-async fn delete_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<()> {
+async fn delete_event(State(st): State<AppState>, user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<()> {
+    let e = st.events.get(id).await?;
+    rbac::require_dean_or_company_manager(&user, e.company_id)?;
     st.events.delete(id).await
 }
 
@@ -74,17 +137,28 @@ struct DeadlineIn {
     deadline: Option<OffsetDateTime>,
 }
 
-async fn publish_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<Json<EventOut>> {
+async fn publish_event(State(st): State<AppState>, user: AuthUser, Path(id): Path<Uuid>)
+                       -> ApiResult<Json<EventOut>> {
+    let e = st.events.get(id).await?;
+    rbac::require_dean_or_company_manager(&user, e.company_id)?;
     Ok(Json(st.events.set_published(id, true).await?))
 }
 
-async fn unpublish_event(State(st): State<AppState>, Path(id): Path<Uuid>) -> ApiResult<Json<EventOut>> {
+async fn unpublish_event(State(st): State<AppState>, user: AuthUser, Path(id): Path<Uuid>)
+                         -> ApiResult<Json<EventOut>> {
+    let e = st.events.get(id).await?;
+    rbac::require_dean_or_company_manager(&user, e.company_id)?;
     Ok(Json(st.events.set_published(id, false).await?))
 }
 
-async fn update_deadline(State(st): State<AppState>, Path(id): Path<Uuid>, Json(body): Json<DeadlineIn>)
-                         -> ApiResult<Json<EventOut>>
-{
+async fn update_deadline(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<DeadlineIn>,
+) -> ApiResult<Json<EventOut>> {
+    let e = st.events.get(id).await?;
+    rbac::require_dean_or_company_manager(&user, e.company_id)?;
     Ok(Json(st.events.set_deadline(id, body.deadline).await?))
 }
 
@@ -95,24 +169,31 @@ pub struct RegistrationOut {
     pub registered_at: OffsetDateTime,
 }
 
-async fn list_registrations(State(st): State<AppState>, Path(event_id): Path<Uuid>)
-                            -> ApiResult<Json<Vec<RegistrationOut>>>
-{
+async fn list_registrations(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Path(event_id): Path<Uuid>,
+) -> ApiResult<Json<Vec<RegistrationOut>>> {
+    let e = st.events.get(event_id).await?;
+    rbac::require_dean_or_company_manager(&user, e.company_id)?;
     let rows = st.events.list_registrations(event_id).await?;
     Ok(Json(rows))
 }
 
-#[derive(serde::Deserialize)]
-struct RegisterIn { student_id: Uuid }
-
-async fn register_event(State(st): State<AppState>, Path(event_id): Path<Uuid>, Json(body): Json<RegisterIn>)
-                        -> ApiResult<()>
-{
-    st.events.register(event_id, body.student_id).await
+async fn register_event(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Path(event_id): Path<Uuid>,
+) -> ApiResult<()> {
+    rbac::require_student_confirmed(&user)?;
+    st.events.register(event_id, user.user_id).await
 }
 
-async fn cancel_registration(State(st): State<AppState>, Path(event_id): Path<Uuid>, Json(body): Json<RegisterIn>)
-                             -> ApiResult<()>
-{
-    st.events.cancel_registration(event_id, body.student_id).await
+async fn cancel_registration(
+    State(st): State<AppState>,
+    user: AuthUser,
+    Path(event_id): Path<Uuid>,
+) -> ApiResult<()> {
+    rbac::require_student_confirmed(&user)?;
+    st.events.cancel_registration(event_id, user.user_id).await
 }
