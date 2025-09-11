@@ -22,6 +22,9 @@ use crate::services::{
 use crate::auth::extractor::AuthState;
 use crate::infra::security::jwt::{TokenConfig, TokenService};
 
+use crate::infra::repositories::manager_repo::PgManagerRepository;
+use crate::services::manager_service::ManagerService;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: Pool<Postgres>,
@@ -29,6 +32,7 @@ pub struct AppState {
 
     pub companies: CompanyService<PgCompanyRepository>,
     pub events:    EventService<PgEventRepository>,
+    pub managers:  ManagerService<PgManagerRepository>,
 
     pub telegram:  TelegramService<PgTelegramLinkRepository, PgTelegramCodeRepository>,
 
@@ -61,10 +65,14 @@ impl AppState {
         // auth service (нужен UserRepository + TokenService)
         let auth_service = AuthService::new(users_repo, token_service);
 
+        let managers_repo = PgManagerRepository::new(db.clone());
+        let managers = ManagerService::new(managers_repo);
+        
         Ok(Self {
             db,
             config: Arc::new(config),
             companies,
+            managers,
             events,
             telegram,
             auth,

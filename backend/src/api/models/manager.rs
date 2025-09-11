@@ -1,0 +1,12 @@
+use serde::Serialize;
+use uuid::Uuid;
+use crate::domain::entities::manager::ManagerStatus;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagerOut {
+    pub user_id: Uuid,
+    pub name: String,
+    pub email: String,
+    pub status: ManagerStatus, // сериализуется "pending"/"confirmed"/"rejected"
+}

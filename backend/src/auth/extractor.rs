@@ -23,6 +23,7 @@ pub struct AuthUser {
     pub role: Role,
     pub manager_status: Option<ManagerStatus>,
     pub company_id: Option<Uuid>,
+    pub student_confirmed: Option<bool>,
     pub raw: Claims,
 }
 
@@ -38,11 +39,11 @@ impl FromRequestParts<AppState> for AuthUser {
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let auth = state.auth.clone();
 
-        let _auth = parts.headers
+        let authz = parts.headers
             .get(http::header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok())
             .ok_or(ApiError::Unauthorized)?;
-        let token = _auth.strip_prefix("Bearer ").ok_or(ApiError::Unauthorized)?;
+        let token = authz.strip_prefix("Bearer ").ok_or(ApiError::Unauthorized)?;
 
         let claims = auth.token_service
             .validate_token(token)
@@ -62,11 +63,17 @@ impl FromRequestParts<AppState> for AuthUser {
             _ => ManagerStatus::Rejected,
         });
 
+        let student_confirmed: Option<bool> = match role {
+            Role::Student => Some(claims.student_confirmed.unwrap_or(false)),
+            _ => None,
+        };
+
         Ok(AuthUser {
             user_id: claims.user_id,
             role,
             manager_status,
             company_id: claims.company_id,
+            student_confirmed,
             raw: claims,
         })
     }
