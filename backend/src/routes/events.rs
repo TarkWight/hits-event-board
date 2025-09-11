@@ -14,7 +14,7 @@ use crate::api::requests::event::{CreateEventIn, UpdateEventIn};
 use crate::infra::repositories::event_repo::EventListFilter;
 use crate::infra::security::rbac;
 use crate::auth::extractor::AuthUser;
-use crate::auth::roles::{ManagerStatus, Role};
+use crate::auth::roles::{ManagerStatus, UserRole};
 use crate::error::ApiResult;
 
 pub fn router(state: AppState) -> Router {
@@ -94,8 +94,8 @@ async fn get_event(State(st): State<AppState>, user: Option<AuthUser>, Path(id):
 
     if !e.is_published {
         if let Some(u) = user {
-            let allowed = u.role == Role::Dean
-                || (u.role == Role::Manager
+            let allowed = u.role == UserRole::Dean
+                || (u.role == UserRole::Manager
                 && u.company_id == Some(e.company_id)
                 && matches!(u.manager_status, Some(ManagerStatus::Confirmed)));
             if !allowed {
@@ -186,7 +186,7 @@ async fn list_company_events(State(st): State<AppState>, user: Option<AuthUser>,
 
 async fn list_student_events(State(st): State<AppState>, user: AuthUser, Path(student_id): Path<Uuid>)
     -> ApiResult<Json<Vec<EventOut>>> {
-    if !(user.role == Role::Dean || user.user_id == student_id) {
+    if !(user.role == UserRole::Dean || user.user_id == student_id) {
         return Err(crate::error::ApiError::Forbidden);
     }
 
@@ -202,8 +202,8 @@ async fn list_student_events(State(st): State<AppState>, user: AuthUser, Path(st
 
 fn can_view_unpublished(user: &AuthUser, company_id: Uuid)
     -> bool {
-    user.role == Role::Dean ||
-        (user.role == Role::Manager
+    user.role == UserRole::Dean ||
+        (user.role == UserRole::Manager
             && user.company_id == Some(company_id)
             && matches!(user.manager_status, Some(ManagerStatus::Confirmed)))
 }

@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{state::AppState, error::ApiResult};
 use crate::auth::extractor::AuthUser;
-use crate::auth::roles::Role;
+use crate::auth::roles::UserRole;
 use crate::error::ApiError;
 
 pub fn router(state: AppState) -> Router {
@@ -25,7 +25,7 @@ async fn create_code(
     State(st): State<AppState>,
     user: AuthUser,
 ) -> ApiResult<Json<LinkCodeOut>> {
-    if user.role != Role::Student {
+    if user.role != UserRole::Student {
         return Err(ApiError::Forbidden);
     }
 
