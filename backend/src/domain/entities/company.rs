@@ -1,5 +1,6 @@
 use thiserror::Error;
 use uuid::Uuid;
+use crate::domain::entities::company_row::CompanyStatus;
 
 #[derive(Debug, Clone)]
 pub struct Company {
@@ -11,6 +12,15 @@ pub struct Company {
 pub enum CompanyValidationError {
     #[error("company name must not be empty")]
     EmptyName,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompanyWithCounts {
+    pub id: Uuid,
+    pub name: String,
+    pub status: CompanyStatus,
+    pub manager_count: Option<i64>,
+    pub event_count: Option<i64>,
 }
 
 impl Company {
