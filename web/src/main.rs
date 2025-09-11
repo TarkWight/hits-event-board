@@ -36,7 +36,7 @@ async fn main() {
 
 async fn shutdown_signal() {
     let _ = signal::ctrl_c().await;
-    println!("\n👋 Shutting down…");
+    println!("\nShutting down…");
 }
 
 async fn proxy_api(State(client): State<Arc<Client>>, mut req: Request) -> impl IntoResponse {
