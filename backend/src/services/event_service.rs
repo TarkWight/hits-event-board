@@ -1,11 +1,9 @@
-use crate::routes::events;
 use uuid::Uuid;
 use time::OffsetDateTime;
 
 use crate::api::models::event::EventOut;
 use crate::api::requests::event::{CreateEventIn, UpdateEventIn};
 use crate::domain::entities::event::{Event, EventPatch};
-// use crate::domain::entities::event_row::EventRow;
 use crate::domain::mappers::event::EventWithCount;
 use crate::infra::repositories::event_repo::{EventRepository, EventListFilter};
 use crate::error::{ApiResult, ApiError};
@@ -23,8 +21,22 @@ impl<R: EventRepository + Send + Sync + 'static> EventService<R> {
         Ok(rows.into_iter().map(EventOut::from).collect())
     }
 
-    pub async fn create(&self, payload: CreateEventIn, _creator: Uuid) -> ApiResult<EventOut> {
-        let d: Event = payload.into();
+    /// Создание события с явным контекстом менеджера/компании
+    pub async fn create(&self, body: CreateEventIn, company_id: Uuid, manager_id: Uuid) -> ApiResult<EventOut> {
+        let d = Event::new(
+            Uuid::new_v4(),
+            company_id,
+            manager_id,
+            body.title,
+            body.short_desc,
+            body.location,
+            body.starts_at,
+            body.ends_at,
+            body.signup_deadline,
+            body.capacity,
+            body.is_published.unwrap_or(false),
+        ).map_err(|e| ApiError::Unprocessable(e.to_string()))?;
+
         let saved = self.repo.create(d.into()).await?;
         Ok(EventOut::from(saved))
     }
@@ -39,7 +51,8 @@ impl<R: EventRepository + Send + Sync + 'static> EventService<R> {
             current.id, current.company_id, current.manager_id, current.title,
             current.description, current.location, current.starts_at, current.ends_at,
             current.signup_deadline, current.capacity, current.is_published
-        ).expect("validated");
+        ).expect("already validated");
+
         let patch: EventPatch = patch_in.into();
         d.apply(patch).map_err(|e| ApiError::Unprocessable(e.to_string()))?;
         Ok(self.repo.update_all(d.into()).await?.into())
@@ -64,16 +77,16 @@ impl<R: EventRepository + Send + Sync + 'static> EventService<R> {
         Ok(self.repo.set_deadline(id, deadline).await?.into())
     }
 
-    pub async fn list_registrations(&self, event_id: Uuid) -> ApiResult<Vec<events::RegistrationOut>> {
+    pub async fn list_registrations(&self, event_id: Uuid) -> ApiResult<Vec<crate::routes::events::RegistrationOut>> {
         let regs = self.repo.list_registrations(event_id).await?;
         Ok(regs.into_iter()
-            .map(|(student_id, registered_at)| events::RegistrationOut { student_id, registered_at })
+            .map(|(student_id, registered_at)| crate::routes::events::RegistrationOut { student_id, registered_at })
             .collect())
     }
 
     pub async fn register(&self, event_id: Uuid, student_id: Uuid) -> ApiResult<()> {
         let now = OffsetDateTime::now_utc();
-        let e = self.repo.get(event_id).await?; 
+        let e = self.repo.get(event_id).await?;
         if !e.is_published {
             return Err(ApiError::PreconditionFailed("event not published".into()));
         }

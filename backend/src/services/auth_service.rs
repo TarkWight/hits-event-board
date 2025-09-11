@@ -1,8 +1,10 @@
-use crate::infra::repositories::user_repo::{UserRepository, UserRow, UserRole};
+use crate::infra::repositories::user_repo::{UserRepository, UserRow};
 use crate::infra::security::{password, password_policy};
 use crate::infra::security::jwt::TokenService;
 use crate::error::{ApiError, ApiResult};
 use crate::api::models::auth::{UserOut, RegisterOut};
+use crate::utils::token::TokenDTO;
+use time::{Duration, OffsetDateTime};
 
 #[derive(Clone)]
 pub struct AuthService<R: UserRepository + Send + Sync + 'static> {
@@ -30,21 +32,20 @@ impl<R: UserRepository + Send + Sync + 'static> AuthService<R> {
         let hash = password::hash_password(&req.password)
             .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-        // создаём студента
         let user: UserRow = self.repo
             .create_student(&req.name, &req.email, &hash)
             .await?;
 
-        // генерим access + refresh
         let access = self.tokens
-            .generate_token(&user.email, user.id, "student", None, None)
+            .generate_token(&user.email, user.id, "student", Some(false), None, None)
             .map_err(|e| ApiError::Internal(e.to_string()))?;
 
         let refresh_plain = self.tokens.generate_refresh_token();
-        // если хочешь сохранять refresh в БД — добавь метод в репо и сохрани hash + exp
-        let refresh_hash = self.tokens.hash_refresh_token(&refresh_plain);
-        let exp = time::OffsetDateTime::now_utc() + time::Duration::days(30);
-        // TODO: repo.save_refresh(user.id, refresh_hash, exp).await?;
+        let refresh_hash  = self.tokens.hash_refresh_token(&refresh_plain);
+        let refresh_exp   = OffsetDateTime::now_utc() + Duration::days(30);
+        // TODO: repo.save_refresh(user.id, &refresh_hash, refresh_exp).await?;
+
+        let access_exp = OffsetDateTime::now_utc() + Duration::minutes(self.tokens.lifetime_minutes());
 
         let out = RegisterOut {
             user: UserOut {
@@ -53,14 +54,14 @@ impl<R: UserRepository + Send + Sync + 'static> AuthService<R> {
                 email: user.email,
                 role: "student".into(),
             },
-            tokens: crate::utils::token::TokenDTO {
+            tokens: TokenDTO {
                 access_token: access,
-                access_token_expiration: time::OffsetDateTime::now_utc()
-                    + time::Duration::minutes(self.tokens.clone().cfg.lifetime_minutes),
+                access_token_expiration: access_exp,
                 refresh_token: refresh_plain,
-                refresh_token_expiration: exp,
+                refresh_token_expiration: refresh_exp,
             },
         };
+
         Ok(out)
     }
 }

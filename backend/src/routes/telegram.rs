@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{state::AppState, error::ApiResult};
 use crate::auth::extractor::AuthUser;
-use crate::auth::extractor::Role;
+use crate::auth::roles::Role;
 use crate::error::ApiError;
 
 pub fn router(state: AppState) -> Router {

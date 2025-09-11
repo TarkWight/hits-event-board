@@ -1,6 +1,6 @@
 use serde::Serialize;
 use uuid::Uuid;
-use crate::domain::entities::manager::ManagerStatus;
+use crate::auth::roles::ManagerStatus;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
