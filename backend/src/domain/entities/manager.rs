@@ -1,17 +1,6 @@
 use uuid::Uuid;
 use thiserror::Error;
-use serde::{Deserialize, Serialize};
-
-#[derive(
-    sqlx::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize
-)]
-#[sqlx(type_name = "manager_status", rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum ManagerStatus {
-    Pending,
-    Confirmed,
-    Rejected,
-}
+use crate::auth::roles::ManagerStatus;
 
 #[derive(Debug, Clone)]
 pub struct Manager {

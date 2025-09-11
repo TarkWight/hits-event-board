@@ -14,6 +14,9 @@ use crate::api::requests::company::{CreateCompanyIn, UpdateCompanyIn};
 use crate::infra::security::rbac;
 use crate::auth::extractor::AuthUser;
 
+use crate::api::models::manager::ManagerOut;
+use crate::auth::roles::ManagerStatus as DManagerStatus;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ListQ {
@@ -124,9 +127,6 @@ async fn set_company_status(
 }
 
 // ---------- менеджеры компании ----------
-
-use crate::api::models::manager::ManagerOut;
-use crate::domain::entities::manager::ManagerStatus as DManagerStatus;
 
 async fn get_company_managers(
     State(st): State<AppState>,

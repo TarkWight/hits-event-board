@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
-
+use crate::auth::roles::ManagerStatus;
 use crate::infra::errors::{RepoError, RepoResult};
-use crate::domain::entities::manager::ManagerStatus;
 use crate::domain::entities::manager_row::ManagerRow;
 
 #[async_trait]

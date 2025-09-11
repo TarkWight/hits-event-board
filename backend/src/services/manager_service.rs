@@ -1,7 +1,7 @@
 use uuid::Uuid;
 use crate::error::ApiResult;
 use crate::api::models::manager::ManagerOut;
-use crate::domain::entities::manager::ManagerStatus;
+use crate::auth::roles::ManagerStatus;
 use crate::domain::entities::manager_row::ManagerRow;
 use crate::infra::repositories::manager_repo::ManagerRepository;
 use crate::domain::mappers::manager::to_manager_out_list;

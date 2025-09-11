@@ -1,6 +1,7 @@
 use time::OffsetDateTime;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::auth::roles::ManagerStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserCommon {
@@ -11,22 +12,6 @@ pub struct UserCommon {
     pub refresh_token_hash: Option<String>,
     #[serde(with = "time::serde::rfc3339::option")]
     pub refresh_token_expiration: Option<OffsetDateTime>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "user_role", rename_all = "lowercase")]
-pub enum UserRole {
-    Student,
-    Manager,
-    Dean,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "manager_status", rename_all = "lowercase")]
-pub enum ManagerStatus {
-    Pending,
-    Confirmed,
-    Rejected,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

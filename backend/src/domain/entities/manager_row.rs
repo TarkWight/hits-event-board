@@ -1,7 +1,7 @@
 use uuid::Uuid;
 use sqlx::FromRow;
-
-use super::manager::{Manager, ManagerStatus, ManagerValidationError};
+use crate::auth::roles::ManagerStatus;
+use super::manager::{Manager, ManagerValidationError};
 
 #[derive(Debug, Clone, FromRow)]
 pub struct ManagerRow {

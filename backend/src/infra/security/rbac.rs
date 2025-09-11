@@ -1,7 +1,8 @@
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult};
-use crate::auth::extractor::{AuthUser, Role, ManagerStatus};
+use crate::auth::extractor::AuthUser;
+use crate::auth::roles::{ManagerStatus, Role};
 
 #[inline]
 pub fn require_role(user: &AuthUser, allowed: &[Role]) -> ApiResult<()> {
@@ -41,4 +42,15 @@ pub fn require_dean_or_company_manager(user: &AuthUser, company_id: Uuid) -> Api
         return Ok(());
     }
     require_manager_confirmed_of_company(user, company_id)
+}
+
+#[inline]
+pub fn require_student_confirmed(user: &AuthUser) -> ApiResult<()> {
+    if user.role == Role::Dean {
+        return Ok(());
+    }
+    if user.role == Role::Student && user.student_confirmed.unwrap_or(false) {
+        return Ok(());
+    }
+    Err(ApiError::Forbidden)
 }

@@ -4,18 +4,10 @@ use axum::{
     http::request::Parts,
 };
 use uuid::Uuid;
-
+use crate::auth::roles::{ManagerStatus, Role};
 use crate::error::ApiError;
 use crate::infra::security::jwt::{Claims, TokenService};
 use crate::state::AppState;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Role { Student, Manager, Dean }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ManagerStatus { Pending, Confirmed, Rejected }
 
 #[derive(Debug, Clone)]
 pub struct AuthUser {

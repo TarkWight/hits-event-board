@@ -1,6 +1,7 @@
 use axum::{Router, routing::get, Json};
 use crate::error::ApiResult;
-use crate::auth::extractor::{AuthUser, Role, ManagerStatus};
+use crate::auth::extractor::AuthUser;
+use crate::auth::roles::{ManagerStatus, Role};
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
