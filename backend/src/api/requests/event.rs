@@ -1,13 +1,10 @@
 use serde::Deserialize;
 use time::OffsetDateTime;
-use uuid::Uuid;
 
 use crate::domain::entities::event::{Event, EventPatch};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateEventIn {
-    pub company_id: Uuid,
-    pub manager_id: Uuid,
     pub title: String,
     pub short_desc: Option<String>,
     pub location: Option<String>,
@@ -18,25 +15,7 @@ pub struct CreateEventIn {
     #[serde(with = "time::serde::rfc3339::option")]
     pub signup_deadline: Option<OffsetDateTime>,
     pub capacity: Option<i32>,
-    pub is_published: bool,
-}
-
-impl From<CreateEventIn> for Event {
-    fn from(v: CreateEventIn) -> Self {
-        Event::new(
-            Uuid::new_v4(),
-            v.company_id,
-            v.manager_id,
-            v.title,
-            v.short_desc,
-            v.location,
-            v.starts_at,
-            v.ends_at,
-            v.signup_deadline,
-            v.capacity,
-            v.is_published,
-        ).expect("validated")
-    }
+    pub is_published: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
