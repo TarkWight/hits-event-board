@@ -2,24 +2,9 @@ use async_trait::async_trait;
 use sqlx::{Pool, Postgres, FromRow};
 use time::OffsetDateTime;
 use uuid::Uuid;
+use crate::auth::roles::{ManagerStatus, UserRole, StudentStatus};
 use crate::infra::errors::{RepoError, RepoResult};
-
-#[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq)]
-#[sqlx(type_name = "user_role", rename_all = "lowercase")]
-pub enum UserRole {
-    Student,
-    Manager,
-    Dean,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct UserRow {
-    pub id: Uuid,
-    pub name: String,
-    pub email: String,
-    pub password_hash: String,
-    pub role: UserRole,
-}
+use crate::domain::entities::user_row::UserRow;
 
 #[async_trait]
 pub trait UserRepository {
@@ -43,13 +28,16 @@ pub trait UserRepository {
         password_hash: &str,
     ) -> RepoResult<UserRow>;
 
-    /// Сохранить refresh-токен для пользователя.
     async fn set_refresh_token(
         &self,
         user_id: Uuid,
         refresh_hash: &str,
         expires_at: OffsetDateTime,
     ) -> RepoResult<()>;
+
+    async fn find_by_id(&self, id: Uuid) -> RepoResult<UserRow>;
+    async fn student_status(&self, user_id: Uuid) -> RepoResult<Option<StudentStatus>>;
+    async fn manager_info(&self, user_id: Uuid) -> RepoResult<Option<(ManagerStatus, Uuid)>>;
 }
 
 #[derive(Clone)]
@@ -73,7 +61,7 @@ impl UserRepository for PgUserRepository {
         password_hash: &str,
         role: UserRole,
     ) -> RepoResult<UserRow> {
-        let res = sqlx::query_as!( 
+        let res = sqlx::query_as!(  // `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
             UserRow,
             r#"
             INSERT INTO users (id, name, email, password_hash, role)
@@ -207,5 +195,60 @@ impl UserRepository for PgUserRepository {
             return Err(RepoError::NotFound);
         }
         Ok(())
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> RepoResult<UserRow> {
+        let u = sqlx::query_as!(
+            UserRow,
+            r#"
+            SELECT
+                id,
+                name,
+                email::text as "email!",
+                password_hash,
+                role as "role: UserRole"
+            FROM users
+            WHERE id = $1
+            "#,
+            id
+        )
+            .fetch_optional(&self.pool)
+            .await?;
+
+        u.ok_or(RepoError::NotFound)
+    }
+
+    async fn student_status(&self, user_id: Uuid) -> RepoResult<Option<crate::auth::roles::StudentStatus>> {
+
+        let row = sqlx::query!(
+            r#"
+            SELECT status as "status: crate::auth::roles::StudentStatus"
+            FROM students
+            WHERE user_id = $1
+            "#,
+            user_id
+        )
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(|r| r.status))
+    }
+
+    async fn manager_info(&self, user_id: Uuid) -> RepoResult<Option<(crate::auth::roles::ManagerStatus, Uuid)>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+              status as "status: crate::auth::roles::ManagerStatus",
+              company_id
+            FROM managers
+            WHERE user_id = $1
+            LIMIT 1
+            "#,
+            user_id
+        )
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(|r| (r.status, r.company_id)))
     }
 }
