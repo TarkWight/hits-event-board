@@ -1,3 +1,4 @@
+// infra/repositories/telegram_repo.rs
 use async_trait::async_trait;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -20,17 +21,7 @@ impl PgTelegramLinkRepository { pub fn new(pool: Pool<Postgres>) -> Self { Self 
 #[async_trait]
 impl TelegramLinkRepository for PgTelegramLinkRepository {
     async fn link(&self, user_id: Uuid, telegram_user_id: i64) -> RepoResult<()> {
-        let is_student: bool = sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM students WHERE user_id = $1) AS "exists!""#,
-            user_id
-        )
-            .fetch_one(&self.pool)
-            .await?;
-        if !is_student {
-            return Err(RepoError::Precondition("only students can be linked to telegram".into()));
-        }
-
-        let _ = sqlx::query!(
+        sqlx::query!(
             r#"
             INSERT INTO telegram_links (user_id, telegram_user_id, created_at)
             VALUES ($1, $2, now())
