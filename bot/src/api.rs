@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use serde_json::json;
+use time::{Duration, OffsetDateTime};
+use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 use crate::{app::App, dto};
@@ -157,25 +159,40 @@ pub async fn me(app: &Arc<App>, access_token: &str) -> Result<dto::MeOut> {
     Ok(me)
 }
 
-/* ---- student: список доступных событий ----*/
-pub async fn student_list_available_events(app: &Arc<App>, token: &str) -> Result<Vec<dto::EventShort>> {
-    let url = format!("{}/api/v1/events?published=true", app.base_url);
+pub async fn student_list_available_events(
+    app: &Arc<App>,
+    access_token: &str,
+) -> Result<Vec<dto::EventShort>> {
+    let now = OffsetDateTime::now_utc();
+    let to  = now + Duration::days(90);
+
+    let from_s = now.format(&Rfc3339)?;
+    let to_s   = to.format(&Rfc3339)?;
+
+    let url = format!(
+        "{}/api/v1/events?published=true&from={}&to={}",
+        app.base_url,
+        urlencoding::encode(&from_s),
+        urlencoding::encode(&to_s),
+    );
+
     println!("[bot][api] -> GET {url}");
-    let resp = app.http.get(&url).bearer_auth(token).send().await?;
+    let resp = app.http.get(&url).bearer_auth(access_token).send().await?;
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     println!("[bot][api] <- status={status}");
-    println!("[bot][api] response: {}", truncate(&text, 800));
+    println!("[bot][api] response: {}", truncate(&text, 500));
 
     if !status.is_success() {
-        return Err(anyhow!("HTTP {}: {}", status, extract_err_message(&text)));
+        let msg = extract_err_message(&text);
+        anyhow::bail!("HTTP {}: {}", status, msg);
     }
-    let list: Vec<dto::EventShort> = serde_json::from_str(&text)
-        .map_err(|e| anyhow!("decode events: {e}"))?;
+
+    let list: Vec<dto::EventShort> =
+        serde_json::from_str(&text).map_err(|e| anyhow::anyhow!("decode events: {e}"))?;
     Ok(list)
 }
 
-/* студент: записаться / отписаться */
 pub async fn student_register_event(app: &Arc<App>, token: &str, event_id: Uuid) -> Result<()> {
     let url = format!("{}/api/v1/events/{event_id}/register", app.base_url);
     println!("[bot][api] -> POST {url}");
