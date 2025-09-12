@@ -132,7 +132,7 @@ where
             return Err(ApiError::Unauthorized);
         }
 
-        self.maybe_link_telegram(&user, req.telegram_user_id).await?;
+        // self.maybe_link_telegram(&user, req.telegram_user_id).await?;
 
         let (access, access_exp, refresh_plain, refresh_exp) =
             self.issue_full_token_set(&user).await?;
@@ -203,7 +203,6 @@ where
     ) -> ApiResult<()> {
         let Some(tg) = telegram_user_id else { return Ok(()); };
 
-        // студент/менеджер/декан — отфильтровать при необходимости
         self.tg_links.link(user.id, tg).await?;
 
         if matches!(user.role, UserRole::Student) {
