@@ -19,7 +19,7 @@ use crate::services::{
     auth_service::AuthService,
     telegram_service::TelegramService,
     manager_service::ManagerService,
-    user_service::UsersService, // ← добавили
+    user_service::UsersService,
 };
 
 use crate::auth::extractor::AuthState;
@@ -37,8 +37,8 @@ pub struct AppState {
 
     pub telegram:  TelegramService<PgTelegramLinkRepository, PgTelegramCodeRepository>,
 
-    pub auth:          AuthState,
-    pub auth_service:  AuthService<PgUserRepository>,
+    pub auth:         AuthState,
+    pub auth_service: AuthService<PgUserRepository, PgTelegramLinkRepository>,
 }
 
 impl AppState {
@@ -55,14 +55,14 @@ impl AppState {
         let companies = CompanyService::new(companies_repo);
         let events    = EventService::new(events_repo);
         let managers  = ManagerService::new(managers_repo);
-        let users     = UsersService::new(users_repo.clone()); // ← users-service
+        let users     = UsersService::new(users_repo.clone());
 
         let token_service = TokenService::new(TokenConfig::from_env());
         let auth          = AuthState { token_service: token_service.clone() };
 
-        let telegram = TelegramService::new(tg_links, tg_codes, config.telegram_code_ttl);
+        let telegram = TelegramService::new(tg_links.clone(), tg_codes, config.telegram_code_ttl);
 
-        let auth_service = AuthService::new(users_repo, token_service);
+        let auth_service = AuthService::new(users_repo, token_service, tg_links);
 
         Ok(Self {
             db,
