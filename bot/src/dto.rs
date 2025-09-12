@@ -39,3 +39,26 @@ pub struct Company {
     pub id: Uuid,
     pub name: String,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct MeOut {
+    pub user_id: Uuid,
+    pub role: String,                    // "student" | "manager" | "dean"
+    pub manager_status: Option<String>,  // "pending" | "confirmed" | "rejected"
+    pub company_id: Option<Uuid>,
+    pub student_status: Option<String>,  // "created" | "linked" | "confirmed" | "rejected"
+    pub email: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct EventShort {
+    pub id: Uuid,
+    pub title: String,
+    pub starts_at: String,   // ISO
+    pub is_published: bool,
+    pub capacity: Option<i32>,
+    pub registered_count: Option<i32>,
+    // is_registered
+}

@@ -15,7 +15,7 @@ pub fn router(state: AppState) -> Router {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 struct LinkCodeOut {
     code: String,
     ttl_minutes: i64,
@@ -37,14 +37,14 @@ async fn create_code(
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 struct ConsumeIn {
     code: String,
     telegram_user_id: i64,
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 struct ConsumeOut {
     user_id: Uuid,
 }

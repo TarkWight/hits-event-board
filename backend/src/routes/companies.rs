@@ -18,7 +18,7 @@ use crate::api::models::manager::ManagerOut;
 use crate::auth::roles::ManagerStatus as DManagerStatus;
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 struct ListQ {
     page: Option<i32>,
     limit: Option<i32>,

@@ -40,10 +40,10 @@ struct ListQ {
     company_id: Option<Uuid>,
     manager_id: Option<Uuid>,
     published: Option<bool>,
-    #[serde(with = "time::serde::rfc3339::option")]
-    from: Option<OffsetDateTime>,
-    #[serde(with = "time::serde::rfc3339::option")]
-    to: Option<OffsetDateTime>,
+    // #[serde(with = "time::serde::rfc3339::option")]
+    // from: Option<OffsetDateTime>,
+    // #[serde(with = "time::serde::rfc3339::option")]
+    // to: Option<OffsetDateTime>,
 }
 
 #[derive(serde::Deserialize)]
@@ -66,8 +66,8 @@ async fn list_events(State(st): State<AppState>, user: Option<AuthUser>, q: Quer
         manager_id: q.manager_id,
         published: q.published,
         q: q.q.clone(),
-        from: q.from,
-        to: q.to,
+        // from: q.from,
+        // to: q.to,
     };
 
     if must_filter_to_published(user.as_ref(), f.company_id) {
@@ -173,8 +173,8 @@ async fn list_company_events(State(st): State<AppState>, user: Option<AuthUser>,
         manager_id: None,
         published: q.published,
         q: q.q.clone(),
-        from: q.from,
-        to: q.to,
+        // from: q.from,
+        // to: q.to,
     };
 
     if must_filter_to_published(user.as_ref(), f.company_id) {
@@ -190,13 +190,7 @@ async fn list_student_events(State(st): State<AppState>, user: AuthUser, Path(st
         return Err(crate::error::ApiError::Forbidden);
     }
 
-    let regs = st.events.list_registrations(student_id).await?;
-    let mut out = Vec::new();
-    for r in regs {
-        let e = st.events.get(r.student_id).await?;
-        out.push(e);
-    }
-
+    let out = st.events.list_events_for_student(student_id).await?;
     Ok(Json(out))
 }
 

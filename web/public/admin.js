@@ -67,15 +67,24 @@ async function createCompanyFlow(){
 
 async function viewCompanyManagers(companyId, companyName){
     const r = await api(`/api/v1/companies/${companyId}/managers`);
-    const list = r.ok ? await r.json() : [];
-    const rows = list.map(m=>`<tr>
-    <td>${m.name}</td><td>${m.email}</td>
-    <td>${badge(m.status, m.status==='pending'?'warn': m.status==='rejected'?'err':'ok')}</td>
-    <td class="row">
-      ${m.status!=='confirmed' ? `<button onclick="setManagerStatus('${companyId}','${m.user_id}','confirmed')">подтвердить</button>`:''}
-      ${m.status!=='rejected' ? `<button onclick="setManagerStatus('${companyId}','${m.user_id}','rejected')">отклонить</button>`:''}
-    </td>
-  </tr>`);
+    if(!r.ok){
+        alert('Не удалось загрузить менеджеров');
+        return;
+    }
+    const list = await r.json();
+
+    const rows = list.map(m=>{
+        const uid = m.user_id ?? m.userId;
+        return `<tr>
+      <td>${m.name}</td><td>${m.email}</td>
+      <td>${badge(m.status, m.status==='pending'?'warn': m.status==='rejected'?'err':'ok')}</td>
+      <td class="row">
+        ${m.status!=='confirmed' && uid ? `<button onclick="setManagerStatus('${encodeURIComponent(companyId)}','${encodeURIComponent(uid)}','confirmed')">подтвердить</button>`:''}
+        ${m.status!=='rejected'  && uid ? `<button onclick="setManagerStatus('${encodeURIComponent(companyId)}','${encodeURIComponent(uid)}','rejected')">отклонить</button>`:''}
+      </td>
+    </tr>`;
+    });
+
     const html = `<div class="card">
     <div class="toolbar"><strong>Менеджеры компании: ${companyName}</strong></div>
     ${table(['Имя','Email','Статус','Действия'], rows)}
@@ -83,9 +92,11 @@ async function viewCompanyManagers(companyId, companyName){
     document.getElementById('companiesTableWrap').innerHTML = html;
 }
 
-async function setManagerStatus(companyId, userId, status){
-    const r = await api(`/api/v1/companies/${companyId}/managers/${userId}/status/${status}`, {method:'POST'});
+async function setManagerStatus(companyId, user_id, status){
+    if(!user_id){ alert('Не удалось определить user_id менеджера'); return; }
+    const r = await api(`/api/v1/companies/${companyId}/managers/${user_id}/status/${status}`, {method:'POST'});
     if(r.ok) loadCompanies();
+    else alert('Не удалось изменить статус менеджера');
 }
 
 async function viewCompanyEvents(companyId){
@@ -181,7 +192,7 @@ async function loadPendingManagers(){
 
 async function loadPendingStudents(){
     // берём created+linked (ожидающие)
-    const url = `/api/v1/dean/students?status=created`; // можно дернуть и linked отдельно
+    const url = `/api/v1/dean/students?status=created`;
     const url2 = `/api/v1/dean/students?status=linked`;
 
     const [r1, r2] = await Promise.all([api(url), api(url2)]);
@@ -211,14 +222,14 @@ async function loadPendingStudents(){
         table(['Студент','Статус','Действия'], rows);
 }
 
-async function approveStudent(userId){
-    const r = await api(`/api/v1/dean/students/${userId}/approve`, { method: 'POST' });
+async function approveStudent(user_id){
+    const r = await api(`/api/v1/dean/students/${user_id}/approve`, { method: 'POST' });
     if (r.ok) loadPendingStudents();
     else alert('Не удалось подтвердить студента');
 }
 
-async function rejectStudent(userId){
-    const r = await api(`/api/v1/dean/students/${userId}/reject`, { method: 'POST' });
+async function rejectStudent(user_id){
+    const r = await api(`/api/v1/dean/students/${user_id}/reject`, { method: 'POST' });
     if (r.ok) loadPendingStudents();
     else alert('Не удалось отклонить студента');
 }
