@@ -1,4 +1,5 @@
 use crate::infra::repositories::user_repo::UserRepository;
+use crate::infra::repositories::telegram_repo::TelegramLinkRepository;
 use crate::infra::security::{password, password_policy};
 use crate::infra::security::jwt::TokenService;
 use crate::error::{ApiError, ApiResult};
@@ -11,14 +12,23 @@ use crate::auth::roles::{ManagerStatus, StudentStatus, UserRole};
 use crate::domain::entities::user_row::UserRow;
 
 #[derive(Clone)]
-pub struct AuthService<R: UserRepository + Send + Sync + 'static> {
+pub struct AuthService<R, L>
+where
+    R: UserRepository + Send + Sync + 'static,
+    L: TelegramLinkRepository + Send + Sync + 'static,
+{
     repo: R,
     tokens: TokenService,
+    tg_links: L,
 }
 
-impl<R: UserRepository + Send + Sync + 'static> AuthService<R> {
-    pub fn new(repo: R, tokens: TokenService) -> Self {
-        Self { repo, tokens }
+impl<R, L> AuthService<R, L>
+where
+    R: UserRepository + Send + Sync + 'static,
+    L: TelegramLinkRepository + Send + Sync + 'static,
+{
+    pub fn new(repo: R, tokens: TokenService, tg_links: L) -> Self {
+        Self { repo, tokens, tg_links }
     }
 
     pub async fn register_manager(
@@ -40,6 +50,8 @@ impl<R: UserRepository + Send + Sync + 'static> AuthService<R> {
         let user: UserRow = self.repo
             .create_manager(&req.name, &req.email, &hash, req.company_id)
             .await?;
+
+        self.maybe_link_telegram(&user, req.telegram_user_id).await?;
 
         let access = self.tokens
             .generate_manager_token(&user.email, user.id, Some("pending"), req.company_id.into())
@@ -84,6 +96,8 @@ impl<R: UserRepository + Send + Sync + 'static> AuthService<R> {
             .create_student(&req.name, &req.email, &hash)
             .await?;
 
+        self.maybe_link_telegram(&user, req.telegram_user_id).await?;
+
         let access = self.tokens
             .generate_student_token(&user.email, user.id, "created")
             .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -107,14 +121,18 @@ impl<R: UserRepository + Send + Sync + 'static> AuthService<R> {
         })
     }
 
-    pub async fn login(&self, req: crate::api::requests::login::LoginRequest, )
-        -> ApiResult<LoginOut> {
+    pub async fn login(
+        &self,
+        req: crate::api::requests::login::LoginRequest,
+    ) -> ApiResult<LoginOut> {
         let user = self.repo.find_by_email(&req.email).await?;
 
         let ok = password::verify_password(&req.password, &user.password_hash);
         if !ok {
             return Err(ApiError::Unauthorized);
         }
+
+        self.maybe_link_telegram(&user, req.telegram_user_id).await?;
 
         let (access, access_exp, refresh_plain, refresh_exp) =
             self.issue_full_token_set(&user).await?;
@@ -177,7 +195,30 @@ impl<R: UserRepository + Send + Sync + 'static> AuthService<R> {
             refresh_token_expiration: refresh_exp,
         })
     }
-    
+
+    async fn maybe_link_telegram(
+        &self,
+        user: &UserRow,
+        telegram_user_id: Option<i64>,
+    ) -> ApiResult<()> {
+        let Some(tg) = telegram_user_id else { return Ok(()); };
+
+        // студент/менеджер/декан — отфильтровать при необходимости
+        self.tg_links.link(user.id, tg).await?;
+
+        if matches!(user.role, UserRole::Student) {
+            if let Some(st) = self.repo.student_status(user.id).await? {
+                if st == StudentStatus::Created {
+                    self.repo.set_student_status(user.id, StudentStatus::Linked).await?;
+                }
+            } else {
+                self.repo.set_student_status(user.id, StudentStatus::Linked).await?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn issue_full_token_set(
         &self,
         user: &UserRow,
