@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use teloxide::Bot;
 use teloxide::dispatching::dialogue::InMemStorage;
@@ -48,6 +49,14 @@ pub enum State {
     StudentMenu { token: String },
     ManagerMenu { token: String, company_id: Option<Uuid> },
 
+    // ---- менеджерские списки/подменю ----
+    ManagerEventsList { token: String, company_id: Uuid, index: HashMap<usize, Uuid> },
+    ManagerEventMenu  { token: String, company_id: Uuid, event_id: Uuid },
+
+    ManagersConfirmedList { token: String, company_id: Uuid, index: HashMap<usize, Uuid> },
+    ManagersPendingList   { token: String, company_id: Uuid, index: HashMap<usize, Uuid> },
+
+    // ---- создание ивента (мастер) ----
     ManagerNewEventTitle   { token: String, company_id: Uuid },
     ManagerNewEventShort   { token: String, company_id: Uuid, title: String },
     ManagerNewEventStarts  { token: String, company_id: Uuid, title: String, short_desc: String },
@@ -65,6 +74,23 @@ impl Default for State {
 pub type MyDialogue = Dialogue<State, InMemStorage<State>>;
 
 /* ===== Keyboards ===== */
+
+fn manager_event_menu_keyboard() -> ReplyMarkup {
+    let kb = KeyboardMarkup::new(vec![
+        vec![KeyboardButton::new("Редактировать ивент")],
+        vec![KeyboardButton::new("Студенты ивента")],
+        vec![KeyboardButton::new("Назад")],
+    ]).resize_keyboard();
+    ReplyMarkup::Keyboard(kb)
+}
+
+fn format_numbered(lines: &[(usize, String)]) -> String {
+    let mut out = String::new();
+    for (i, line) in lines {
+        out.push_str(&format!("{i} - {line}\n"));
+    }
+    out
+}
 
 fn start_keyboard() -> ReplyMarkup {
     let kb = KeyboardMarkup::new(vec![
@@ -94,8 +120,9 @@ fn student_keyboard() -> ReplyMarkup {
 fn manager_keyboard() -> ReplyMarkup {
     let kb = KeyboardMarkup::new(vec![
         vec![KeyboardButton::new("Добавить ивент")],
+        vec![KeyboardButton::new("Список ивентов")],
         vec![KeyboardButton::new("Менеджеры компании")],
-        vec![KeyboardButton::new("Студенты ивента")],
+        vec![KeyboardButton::new("Заявки в компанию")],
         vec![KeyboardButton::new("Выйти")],
     ]).resize_keyboard();
     ReplyMarkup::Keyboard(kb)
@@ -117,10 +144,8 @@ fn companies_inline(companies: &[dto::Company]) -> InlineKeyboardMarkup {
 }
 
 fn events_inline(events: &[dto::EventShort]) -> InlineKeyboardMarkup {
-    // по кнопке — подписаться или отписаться
     let rows = events.iter().map(|e| {
         let text = format!("{} • {}", e.title, e.starts_at);
-        // Для простоты: всегда показываем «записаться». Можешь расширить на основе is_registered
         vec![InlineKeyboardButton::callback(text, format!("evt_reg:{}", e.id))]
     }).collect::<Vec<_>>();
     InlineKeyboardMarkup::new(rows)
@@ -197,7 +222,6 @@ pub async fn handle_message(bot: Bot, msg: Message, d: MyDialogue, app: Arc<App>
             bot.send_message(chat_id, "Выполняю вход...").await?;
             match api::login_and_link(&app, &email, &text, tg_id).await {
                 Ok(tokens) => {
-
                     match api::me(&app, &tokens.access_token).await {
                         Ok(me) if me.role == "student" => {
                             d.update(State::StudentMenu { token: tokens.access_token }).await?;
@@ -267,7 +291,6 @@ pub async fn handle_message(bot: Bot, msg: Message, d: MyDialogue, app: Arc<App>
             bot.send_message(chat_id, "Регистрирую...").await?;
             match api::register_student_and_link(&app, &email, &text, tg_id).await {
                 Ok(tokens) => {
-                    // сразу в меню студента
                     d.update(State::StudentMenu { token: tokens.access_token }).await?;
                     bot.send_message(chat_id, "Студент зарегистрирован! Меню студента:")
                         .reply_markup(student_keyboard())
@@ -352,33 +375,114 @@ pub async fn handle_message(bot: Bot, msg: Message, d: MyDialogue, app: Arc<App>
                     bot.send_message(chat_id, "Не определена компания менеджера.").await?;
                 }
             }
-            "Менеджеры компании" => {
+            "Список ивентов" => {
                 if let Some(cid) = company_id {
-                    match api::manager_list_company_managers(&app, &token, cid).await {
-                        Ok(val) => {
-                            let mut lines = vec!["Менеджеры:".to_string()];
-                            if let Some(arr) = val.as_array() {
-                                for m in arr {
-                                    let name = m.get("name").and_then(|x| x.as_str()).unwrap_or("-");
-                                    let email = m.get("email").and_then(|x| x.as_str()).unwrap_or("-");
-                                    let uid = m.get("user_id").and_then(|x| x.as_str()).unwrap_or("");
-                                    let st = m.get("status").and_then(|x| x.as_str()).unwrap_or("-");
-                                    lines.push(format!("{name} <{email}> — {st} (uid={uid})"));
-                                }
+                    match api::manager_list_company_events(&app, &token, cid).await {
+                        Ok(list) if !list.is_empty() => {
+                            let mut idx = HashMap::new();
+                            let mut lines: Vec<(usize, String)> = Vec::new();
+                            for (n, e) in list.iter().enumerate() {
+                                let n1 = n + 1;
+                                idx.insert(n1, e.id);
+                                let line = format!("{}  •  {}", e.title, e.starts_at);
+                                lines.push((n1, line));
                             }
-                            lines.push("Для подтверждения/отклонения напиши: \"апрув <uid>\" или \"реджект <uid>\"".into());
-                            bot.send_message(chat_id, lines.join("\n")).await?;
+                            d.update(State::ManagerEventsList {
+                                token: token.clone(),
+                                company_id: cid,
+                                index: idx
+                            }).await?;
+                            bot.send_message(
+                                chat_id,
+                                format!("Ивенты компании:\n{}\nВыбери: /event N", format_numbered(&lines))
+                            ).await?;
+                        }
+                        Ok(_) => {
+                            bot.send_message(chat_id, "Ивентов нет.").await?;
                         }
                         Err(e) => {
-                            bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
+                            bot.send_message(chat_id, format!("Не удалось получить ивенты: {e}")).await?;
                         }
                     }
                 } else {
                     bot.send_message(chat_id, "Не определена компания менеджера.").await?;
                 }
             }
-            "Студенты ивента" => {
-                bot.send_message(chat_id, "Отправь команду: \"студенты <event_id>\"").await?;
+            "Менеджеры компании" => {
+                if let Some(cid) = company_id {
+                    match api::manager_list_company_managers(&app, &token, cid).await {
+                        Ok(val) => {
+                            // выводим только confirmed (n - name)
+                            let mut idx = HashMap::new();
+                            let mut lines: Vec<(usize, String)> = Vec::new();
+                            if let Some(arr) = val.as_array() {
+                                let mut n = 1usize;
+                                for m in arr {
+                                    let st = m.get("status").and_then(|x| x.as_str()).unwrap_or("-");
+                                    if st != "confirmed" { continue; }
+                                    if let (Some(uid), Some(name)) = (
+                                        m.get("user_id").and_then(|x| x.as_str()),
+                                        m.get("name").and_then(|x| x.as_str())
+                                    ) {
+                                        if let Ok(u) = Uuid::parse_str(uid) {
+                                            idx.insert(n, u);
+                                            lines.push((n, name.to_string()));
+                                            n += 1;
+                                        }
+                                    }
+                                }
+                            }
+                            d.update(State::ManagersConfirmedList { token: token.clone(), company_id: cid, index: idx }).await?;
+                            let msg = if lines.is_empty() {
+                                "Подтверждённых менеджеров нет".to_string()
+                            } else {
+                                format!("Подтверждённые менеджеры:\n{}", format_numbered(&lines))
+                            };
+                            bot.send_message(chat_id, msg).await?;
+                        }
+                        Err(e) => {
+                            bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
+                        }
+                    }
+                } else { bot.send_message(chat_id, "Не определена компания менеджера.").await?; }
+            }
+            "Заявки в компанию" => {
+                if let Some(cid) = company_id {
+                    match api::manager_list_company_managers(&app, &token, cid).await {
+                        Ok(val) => {
+                            // pending: n - name, далее /апрув n или /реджект n
+                            let mut idx = HashMap::new();
+                            let mut lines: Vec<(usize, String)> = Vec::new();
+                            if let Some(arr) = val.as_array() {
+                                let mut n = 1usize;
+                                for m in arr {
+                                    let st = m.get("status").and_then(|x| x.as_str()).unwrap_or("-");
+                                    if st != "pending" { continue; }
+                                    if let (Some(uid), Some(name)) = (
+                                        m.get("user_id").and_then(|x| x.as_str()),
+                                        m.get("name").and_then(|x| x.as_str())
+                                    ) {
+                                        if let Ok(u) = Uuid::parse_str(uid) {
+                                            idx.insert(n, u);
+                                            lines.push((n, name.to_string()));
+                                            n += 1;
+                                        }
+                                    }
+                                }
+                            }
+                            d.update(State::ManagersPendingList { token: token.clone(), company_id: cid, index: idx }).await?;
+                            let msg = if lines.is_empty() {
+                                "Заявок нет".to_string()
+                            } else {
+                                format!("Заявки менеджеров:\n{}\nДействия: /апрув N  или  /реджект N", format_numbered(&lines))
+                            };
+                            bot.send_message(chat_id, msg).await?;
+                        }
+                        Err(e) => {
+                            bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
+                        }
+                    }
+                } else { bot.send_message(chat_id, "Не определена компания менеджера.").await?; }
             }
             "Выйти" => {
                 d.update(State::Menu).await?;
@@ -386,58 +490,212 @@ pub async fn handle_message(bot: Bot, msg: Message, d: MyDialogue, app: Arc<App>
                     .reply_markup(start_keyboard())
                     .await?;
             }
+            _ => {
+                bot.send_message(chat_id, "Выберите пункт меню.")
+                    .reply_markup(manager_keyboard())
+                    .await?;
+            }
+        }
+
+        /* ----- менеджер: список ивентов (нумерованный), выбор /event N ----- */
+        State::ManagerEventsList { token, company_id, index } => {
+            if text.eq_ignore_ascii_case("назад") {
+                d.update(State::ManagerMenu { token, company_id: Some(company_id) }).await?;
+                bot.send_message(chat_id, "Меню менеджера:")
+                    .reply_markup(manager_keyboard())
+                    .await?;
+                return Ok(());
+            }
+
+            if let Some(n_txt) = text.strip_prefix("/event ").or_else(|| text.strip_prefix("/EVENT ")) {
+                if let Some(n_txt) = text.strip_prefix("/event ") {
+                    if let Ok(n) = n_txt.trim().parse::<usize>() {
+                        if let Some(&event_id) = index.get(&n) {
+                            d.update(State::ManagerEventMenu { token: token.clone(), company_id, event_id }).await?;
+                            bot.send_message(chat_id,
+                                             format!("Ивент выбран: {}\nЧто дальше?", n)
+                            )
+                                .reply_markup(manager_event_menu_keyboard())
+                                .await?;
+                            return Ok(());
+                        }
+                    }
+                    bot.send_message(chat_id, "Неверный номер. Повтори ещё раз.").await?;
+                    return Ok(());
+                }
+            }
+
+            bot.send_message(chat_id, "Выбери ивент командой: /event N  или вернись \"Назад\".").await?;
+        }
+
+        /* ----- менеджер: меню конкретного ивента ----- */
+        State::ManagerEventMenu { token, company_id, event_id } => match text.as_str() {
+            "Редактировать ивент" => {
+                bot.send_message(chat_id,
+                                 "Редактирование:\n\
+         /publish on|off — опубликовать/снять\n\
+         /deadline <ISO8601|null> — задать дедлайн или убрать\n\
+         \"Назад\" — вернуться"
+                )
+                    .reply_markup(manager_event_menu_keyboard())
+                    .await?;
+            }
+            "Студенты ивента" => {
+                match api::manager_list_event_students(&app, &token, event_id).await {
+                    Ok(val) => {
+                        let mut lines = vec!["Записавшиеся:".to_string()];
+                        if let Some(arr) = val.as_array() {
+                            for r in arr {
+                                let sid  = r.get("student_id").and_then(|x| x.as_str()).unwrap_or("-");
+                                let when = r.get("registered_at").and_then(|x| x.as_str()).unwrap_or("-");
+                                lines.push(format!("{sid} — {when}"));
+                            }
+                        }
+                        bot.send_message(chat_id, lines.join("\n"))
+                            .reply_markup(manager_event_menu_keyboard())
+                            .await?;
+                    }
+                    Err(e) => {
+                        bot.send_message(chat_id, format!("Не удалось загрузить список: {e}"))
+                            .reply_markup(manager_event_menu_keyboard())
+                            .await?;
+                    }
+                }
+            }
+            "Назад" | "/back" => {
+                match api::manager_list_company_events(&app, &token, company_id).await {
+                    Ok(list) if !list.is_empty() => {
+                        let mut idx = HashMap::new();
+                        let mut lines: Vec<(usize, String)> = Vec::new();
+                        for (n, e) in list.iter().enumerate() {
+                            let n1 = n + 1;
+                            idx.insert(n1, e.id);
+                            let line = format!("{}  •  {}", e.title, e.starts_at);
+                            lines.push((n1, line));
+                        }
+                        d.update(State::ManagerEventsList { token: token.clone(), company_id, index: idx }).await?;
+                        bot.send_message(chat_id, format!(
+                            "Ивенты компании:\n{}\nВыбери: /event N",
+                            format_numbered(&lines)
+                        ))
+                            .reply_markup(manager_keyboard()) // можно и оставить меню ивентов
+                            .await?;
+                    }
+                    Ok(_) => {
+                        d.update(State::ManagerMenu { token: token.clone(), company_id: Some(company_id) }).await?;
+                        bot.send_message(chat_id, "Ивентов нет.")
+                            .reply_markup(manager_keyboard())
+                            .await?;
+                    }
+                    Err(e) => {
+                        d.update(State::ManagerMenu { token: token.clone(), company_id: Some(company_id) }).await?;
+                        bot.send_message(chat_id, format!("Ошибка: {e}"))
+                            .reply_markup(manager_keyboard())
+                            .await?;
+                    }
+                }
+            }
             other => {
-                if other.starts_with("апрув ") {
-                    if let (Some(cid), Some(uid)) = (company_id, other.split_whitespace().nth(1)) {
-                        if let Ok(uid) = Uuid::parse_str(uid) {
-                            let State::ManagerMenu{ token, .. } = d.get().await?.unwrap() else { return Ok(()) };
-                            match api::manager_set_manager_status(&app, &token, cid, uid, "confirmed").await {
-                                Ok(_) => { bot.send_message(chat_id, "Подтверждено.").await?; }
-                                Err(e) => { bot.send_message(chat_id, format!("Ошибка: {e}")).await?; }
-                            }
+                if let Some(arg) = other.strip_prefix("/publish ").map(|s| s.trim().to_lowercase()) {
+                    let flag = matches!(arg.as_str(), "on" | "true" | "yes" | "y" | "1" | "да");
+                    match api::manager_set_event_published(&app, &token, event_id, flag).await {
+                        Ok(_) => {
+                            bot.send_message(
+                                chat_id,
+                                if flag { "Опубликовано." } else { "Снято с публикации." }
+                            ).await?;
+                        }
+                        Err(e) => {
+                            bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
                         }
                     }
-                } else if other.starts_with("реджект ") {
-                    if let (Some(cid), Some(uid)) = (company_id, other.split_whitespace().nth(1)) {
-                        if let Ok(uid) = Uuid::parse_str(uid) {
-                            let State::ManagerMenu{ token, .. } = d.get().await?.unwrap() else { return Ok(()) };
-                            match api::manager_set_manager_status(&app, &token, cid, uid, "rejected").await {
-                                Ok(_) => { bot.send_message(chat_id, "Отклонено.").await?; }
-                                Err(e) => { bot.send_message(chat_id, format!("Ошибка: {e}")).await?; }
-                            }
+                } else if let Some(arg) = other.strip_prefix("/deadline ").map(|s| s.trim()) {
+                    let deadline = if arg.eq_ignore_ascii_case("null") {
+                        None
+                    } else {
+                        Some(arg.to_string())
+                    };
+                    match api::manager_set_event_deadline(&app, &token, event_id, deadline.as_deref()).await {
+                        Ok(_) => {
+                            bot.send_message(chat_id, "Дедлайн обновлён.").await?;
                         }
-                    }
-                } else if other.starts_with("студенты ") {
-                    if let Some(eid) = other.split_whitespace().nth(1) {
-                        if let Ok(eid) = Uuid::parse_str(eid) {
-                            let State::ManagerMenu{ token, .. } = d.get().await?.unwrap() else { return Ok(()) };
-                            match api::manager_list_event_students(&app, &token, eid).await {
-                                Ok(val) => {
-                                    let mut lines = vec![format!("Записавшиеся на {eid}:")];
-                                    if let Some(arr) = val.as_array() {
-                                        for r in arr {
-                                            let sid = r.get("student_id").and_then(|x| x.as_str()).unwrap_or("-");
-                                            let when = r.get("registered_at").and_then(|x| x.as_str()).unwrap_or("-");
-                                            lines.push(format!("{sid} — {when}"));
-                                        }
-                                    }
-                                    bot.send_message(chat_id, lines.join("\n")).await?;
-                                }
-                                Err(e) => {
-                                    bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
-                                }
-                            }
+                        Err(e) => {
+                            bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
                         }
                     }
                 } else {
-                    bot.send_message(chat_id, "Выберите пункт меню.")
-                        .reply_markup(manager_keyboard())
-                        .await?;
+                    bot.send_message(
+                        chat_id,
+                        "Команды: /publish on|off, /deadline <ISO|null>, либо \"Назад\"."
+                    ).await?;
                 }
             }
         }
 
-        /* ----- менеджер: создание ивента ----- */
+        /* ----- менеджер: подтверждённые менеджеры — просто список и «Назад» ----- */
+        State::ManagersConfirmedList { token, company_id, .. } => {
+            d.update(State::ManagerMenu { token, company_id: Some(company_id) }).await?;
+            bot.send_message(chat_id, "Меню менеджера:")
+                .reply_markup(manager_keyboard())
+                .await?;
+        }
+
+        /* ----- менеджер: заявки (pending) с /апрув N и /реджект N ----- */
+        State::ManagersPendingList { token, company_id, index } => {
+            if text.eq_ignore_ascii_case("назад") {
+                d.update(State::ManagerMenu { token, company_id: Some(company_id) }).await?;
+                bot.send_message(chat_id, "Меню менеджера:")
+                    .reply_markup(manager_keyboard())
+                    .await?;
+                return Ok(());
+            }
+
+            if let Some(n_txt) = text.strip_prefix("/апрув ").or_else(|| text.strip_prefix("/approve ")) {
+                if let Ok(n) = n_txt.trim().parse::<usize>() {
+                    if let Some(&uid) = index.get(&n) {
+                        match api::manager_set_manager_status(&app, &token, company_id, uid, "confirmed").await {
+                            Ok(_) => {
+                                bot.send_message(chat_id, "Подтверждено.").await?;
+                            }
+                            Err(e) => {
+                                bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
+                            }
+                        }
+                    } else {
+                        bot.send_message(chat_id, "Неверный номер. Повтори ещё раз.").await?;
+                    }
+                } else {
+                    bot.send_message(chat_id, "Ожидался номер после команды.").await?;
+                }
+                return Ok(());
+            }
+
+            if let Some(n_txt) = text.strip_prefix("/реджект ")
+                .or_else(|| text.strip_prefix("/reject "))
+            {
+                if let Ok(n) = n_txt.trim().parse::<usize>() {
+                    if let Some(&uid) = index.get(&n) {
+                        match api::manager_set_manager_status(&app, &token, company_id, uid, "rejected").await {
+                            Ok(_) => {
+                                bot.send_message(chat_id, "Отклонено.").await?;
+                            }
+                            Err(e) => {
+                                bot.send_message(chat_id, format!("Ошибка: {e}")).await?;
+                            }
+                        }
+                    } else {
+                        bot.send_message(chat_id, "Неверный номер. Повтори ещё раз.").await?;
+                    }
+                } else {
+                    bot.send_message(chat_id, "Ожидался номер после команды.").await?;
+                }
+                return Ok(());
+            }
+
+            bot.send_message(chat_id, "Доступные действия: /апрув N, /реджект N, либо \"Назад\".").await?;
+        }
+
+        /* ----- менеджер: создание ивента (мастер) ----- */
         State::ManagerNewEventTitle { token, company_id } => {
             let title = text;
             d.update(State::ManagerNewEventShort { token, company_id, title }).await?;
@@ -518,6 +776,8 @@ pub async fn handle_message(bot: Bot, msg: Message, d: MyDialogue, app: Arc<App>
     Ok(())
 }
 
+/* ===== Callbacks (inline) ===== */
+
 pub async fn handle_callback(bot: Bot, q: CallbackQuery, d: MyDialogue, app: Arc<App>) -> anyhow::Result<()> {
     let Some(data) = q.data.as_deref() else { return Ok(()) };
     let Some(m) = q.message.as_ref().and_then(|m| m.regular_message()) else { return Ok(()) };
@@ -567,7 +827,6 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery, d: MyDialogue, app: Arc
 
                 match api::register_manager_and_link(&app, &email, &password, company_id, q.from.id.0 as i64).await {
                     Ok(tokens) => {
-                        // после регистрации — в меню менеджера
                         d.update(State::ManagerMenu { token: tokens.access_token, company_id: Some(company_id) }).await?;
                         bot.send_message(chat_id, "Менеджер зарегистрирован! Заявка отправлена на одобрение.")
                             .await?;

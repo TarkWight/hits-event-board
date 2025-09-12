@@ -1,8 +1,6 @@
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use serde_json::json;
-use time::{Duration, OffsetDateTime};
-use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 use crate::{app::App, dto};
@@ -319,6 +317,124 @@ pub async fn manager_update_event_title(
     if !status.is_success() {
         return Err(anyhow!("HTTP {}: {}", status, extract_err_message(&text)));
     }
+    Ok(())
+}
+
+// список ивентов компании (для менеджера)
+pub async fn manager_list_company_events(
+    app: &Arc<App>, access_token: &str, company_id: Uuid
+) -> Result<Vec<dto::EventShort>> {
+    let url = format!("{}/api/v1/events/companies/{}", app.base_url, company_id);
+    println!("[bot][api] -> GET {url}");
+    let resp = app.http.get(&url).bearer_auth(access_token).send().await?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    println!("[bot][api] <- status={status}");
+    println!("[bot][api] response: {}", truncate(&text, 500));
+    if !status.is_success() {
+        let msg = extract_err_message(&text);
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, msg));
+    }
+    let items: Vec<dto::EventShort> = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("decode company events: {e}"))?;
+    Ok(items)
+}
+
+// получить ивент
+pub async fn manager_get_event(
+    app: &Arc<App>, access_token: &str, event_id: Uuid
+) -> Result<serde_json::Value> {
+    let url = format!("{}/api/v1/events/{}", app.base_url, event_id);
+    println!("[bot][api] -> GET {url}");
+    let resp = app.http.get(&url).bearer_auth(access_token).send().await?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    println!("[bot][api] <- status={status}");
+    println!("[bot][api] response: {}", truncate(&text, 500));
+    if !status.is_success() {
+        let msg = extract_err_message(&text);
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, msg));
+    }
+    Ok(serde_json::from_str(&text)?)
+}
+
+// publish / unpublish
+pub async fn manager_publish_event(app: &Arc<App>, token: &str, event_id: Uuid) -> Result<()> {
+    let url = format!("{}/api/v1/events/{}/publish", app.base_url, event_id);
+    let r = app.http.post(&url).bearer_auth(token).send().await?;
+    let status = r.status();
+    let t = r.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, extract_err_message(&t)));
+    }
+    Ok(())
+}
+
+pub async fn manager_unpublish_event(app: &Arc<App>, token: &str, event_id: Uuid) -> Result<()> {
+    let url = format!("{}/api/v1/events/{}/unpublish", app.base_url, event_id);
+    let r = app.http.post(&url).bearer_auth(token).send().await?;
+    let status = r.status();
+    let t = r.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, extract_err_message(&t)));
+    }
+    Ok(())
+}
+
+// дедлайн
+pub async fn manager_set_event_deadline(
+    app:&Arc<App>, token:&str, event_id:Uuid, iso_opt: Option<&str>
+) -> Result<()> {
+    let url = format!("{}/api/v1/events/{}/deadline", app.base_url, event_id);
+    let body = json!({ "deadline": iso_opt });
+    println!("[bot][api] -> POST {url} body={}", body);
+    let r = app.http.post(&url).bearer_auth(token).json(&body).send().await?;
+    let status = r.status();
+    let text = r.text().await.unwrap_or_default();
+    println!("[bot][api] <- status={status} {}", truncate(&text, 300));
+    if !status.is_success() {
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, extract_err_message(&text)));
+    }
+    Ok(())
+}
+
+pub async fn get_user(app:&Arc<App>, token:&str, user_id:Uuid) -> Result<dto::UserOut> {
+    let url = format!("{}/api/v1/users/{}", app.base_url, user_id);
+    println!("[bot][api] -> GET {url}");
+    let r = app.http.get(&url).bearer_auth(token).send().await?;
+    let status = r.status();
+    let text = r.text().await.unwrap_or_default();
+    println!("[bot][api] <- status={status}");
+    if !status.is_success() {
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, extract_err_message(&text)));
+    }
+    let u: dto::UserOut = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("decode user: {e}"))?;
+    Ok(u)
+}
+
+pub async fn manager_set_event_published(app: &Arc<App>, access_token: &str, event_id: Uuid, published: bool)
+    -> Result<()> {
+    let action = if published { "publish" } else { "unpublish" };
+    let url = format!("{}/api/v1/events/{}/{}", app.base_url, event_id, action);
+
+    println!("[bot][api] -> POST {url}");
+    let resp = app.http.post(&url)
+        .bearer_auth(access_token)
+        .send()
+        .await?;
+
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    println!("[bot][api] <- status={status}");
+    if !status.is_success() {
+        println!("[bot][api] response: {}", truncate(&text, 500));
+        let msg = extract_err_message(&text);
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, msg));
+    }
+
     Ok(())
 }
 /* опционально: оставляем на будущее; сейчас не используется */
