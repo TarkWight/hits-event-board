@@ -24,6 +24,7 @@ use crate::services::{
 
 use crate::auth::extractor::AuthState;
 use crate::infra::security::jwt::{TokenConfig, TokenService};
+use crate::services::registration_service::RegistrationService;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -52,6 +53,7 @@ impl AppState {
         let tg_codes       = PgTelegramCodeRepository::new(db.clone());
         let managers_repo  = PgManagerRepository::new(db.clone());
 
+        // let registration = RegistrationService::new(registration_repo);
         let companies = CompanyService::new(companies_repo);
         let events    = EventService::new(events_repo);
         let managers  = ManagerService::new(managers_repo);
