@@ -4,6 +4,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::domain::entities::event_row::EventRow;
+use crate::domain::entities::registration_row::RegistrationRow;
 use crate::domain::mappers::event::EventWithCount;
 use crate::infra::errors::{RepoError, RepoResult};
 
@@ -13,8 +14,8 @@ pub struct EventListFilter {
     pub manager_id: Option<Uuid>,
     pub published: Option<bool>,
     pub q: Option<String>,
-    pub from: Option<OffsetDateTime>,
-    pub to: Option<OffsetDateTime>,
+    // pub from: Option<OffsetDateTime>,
+    // pub to: Option<OffsetDateTime>,
 }
 
 #[async_trait]
@@ -30,6 +31,7 @@ pub trait EventRepository {
     async fn count_registrations(&self, event_id: Uuid) -> RepoResult<i64>;
     async fn register(&self, event_id: Uuid, student_id: Uuid, now_utc: OffsetDateTime) -> RepoResult<()>;
     async fn cancel_registration(&self, event_id: Uuid, student_id: Uuid, now_utc: OffsetDateTime) -> RepoResult<()>;
+    async fn list_registrations_by_student(&self, student_id: Uuid) -> RepoResult<Vec<RegistrationRow>>;
 }
 
 #[derive(Clone)]
@@ -78,18 +80,18 @@ impl EventRepository for PgEventRepository {
             r#"
             SELECT e.id, e.company_id, e.manager_id, e.title, e.description, e.location,
                    e.starts_at, e.ends_at, e.signup_deadline, e.capacity, e.is_published,
-                   (SELECT COUNT(*)::bigint FROM registrations er WHERE er.event_id = e.id) AS "registered_count?"
+                   (SELECT COUNT(*)::bigint
+                      FROM registrations er
+                     WHERE er.event_id = e.id) AS "registered_count?"
             FROM events e
-            WHERE ($1::uuid IS NULL OR e.company_id   = $1)
-              AND ($2::uuid IS NULL OR e.manager_id   = $2)
-              AND ($3::bool IS NULL OR e.is_published = $3)
-              AND ($4::text IS NULL OR e.title ILIKE $4)
-              AND ($5::timestamptz IS NULL OR e.starts_at >= $5)
-              AND ($6::timestamptz IS NULL OR e.starts_at <= $6)
+            WHERE ($1::uuid  IS NULL OR e.company_id   = $1)
+              AND ($2::uuid  IS NULL OR e.manager_id   = $2)
+              AND ($3::bool  IS NULL OR e.is_published = $3)
+              AND ($4::text  IS NULL OR e.title ILIKE  $4)
             ORDER BY e.starts_at DESC
-            LIMIT $7 OFFSET $8
+            LIMIT $5 OFFSET $6
             "#,
-            f.company_id, f.manager_id, f.published, q_like, f.from, f.to,
+            f.company_id, f.manager_id, f.published, q_like,
             limit_i64, offset_i64
         )
             .fetch_all(&self.pool)
@@ -241,5 +243,22 @@ impl EventRepository for PgEventRepository {
             .execute(&self.pool).await?;
         if res.rows_affected() == 0 { return Err(RepoError::NotFound); }
         Ok(())
+    }
+
+    async fn list_registrations_by_student(&self, student_id: Uuid) -> RepoResult<Vec<RegistrationRow>> {
+        let rows = sqlx::query_as!(
+        RegistrationRow,
+        r#"
+        SELECT event_id, student_id, registered_at, NULL as gcal_event_id
+        FROM registrations
+        WHERE student_id = $1
+        ORDER BY registered_at DESC
+        "#,
+        student_id
+    )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(RepoError::Db)?;
+        Ok(rows)
     }
 }
