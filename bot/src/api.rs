@@ -163,17 +163,17 @@ pub async fn student_list_available_events(
     app: &Arc<App>,
     access_token: &str,
 ) -> Result<Vec<dto::EventShort>> {
-    let now = OffsetDateTime::now_utc();
-    let to  = now + Duration::days(90);
-
-    let from_s = now.format(&Rfc3339)?;
-    let to_s   = to.format(&Rfc3339)?;
+    // let now = OffsetDateTime::now_utc();
+    // let to  = now + Duration::days(90);
+    //
+    // let from_s = now.format(&Rfc3339)?;
+    // let to_s   = to.format(&Rfc3339)?;
 
     let url = format!(
-        "{}/api/v1/events?published=true&from={}&to={}",
+        "{}/api/v1/events?published=true",
         app.base_url,
-        urlencoding::encode(&from_s),
-        urlencoding::encode(&to_s),
+        // urlencoding::encode(&from_s),
+        // urlencoding::encode(&to_s),
     );
 
     println!("[bot][api] -> GET {url}");
