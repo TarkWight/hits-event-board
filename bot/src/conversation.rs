@@ -14,10 +14,13 @@ use teloxide::utils::command::BotCommands;
 use crate::{api, app::App, dto, util};
 
 #[derive(BotCommands, Clone)]
-#[command(rename_rule = "lowercase", description = "Команды:")]
+#[command(rename_rule = "lowercase", description = "Команды бота")]
 pub enum Command {
+    #[command(description = "Показать меню")]
     Start,
+    #[command(description = "Помощь")]
     Help,
+    #[command(description = "Сбросить диалог")]
     Reset,
 }
 
