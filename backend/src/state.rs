@@ -10,6 +10,7 @@ use crate::infra::repositories::{
     user_repo::PgUserRepository,
     telegram_repo::PgTelegramLinkRepository,
     telegram_code_repo::PgTelegramCodeRepository,
+    manager_repo::PgManagerRepository,
 };
 
 use crate::services::{
@@ -17,13 +18,12 @@ use crate::services::{
     event_service::EventService,
     auth_service::AuthService,
     telegram_service::TelegramService,
+    manager_service::ManagerService,
+    user_service::UsersService, // ← добавили
 };
 
 use crate::auth::extractor::AuthState;
 use crate::infra::security::jwt::{TokenConfig, TokenService};
-
-use crate::infra::repositories::manager_repo::PgManagerRepository;
-use crate::services::manager_service::ManagerService;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -33,6 +33,7 @@ pub struct AppState {
     pub companies: CompanyService<PgCompanyRepository>,
     pub events:    EventService<PgEventRepository>,
     pub managers:  ManagerService<PgManagerRepository>,
+    pub users:     UsersService<PgUserRepository>,
 
     pub telegram:  TelegramService<PgTelegramLinkRepository, PgTelegramCodeRepository>,
 
@@ -44,36 +45,32 @@ impl AppState {
     pub async fn init_with(config: Config) -> anyhow::Result<Self> {
         let db = db::init_pool(&config.database_url).await?;
 
-        // repositories
         let companies_repo = PgCompanyRepository::new(db.clone());
         let events_repo    = PgEventRepository::new(db.clone());
         let users_repo     = PgUserRepository::new(db.clone());
         let tg_links       = PgTelegramLinkRepository::new(db.clone());
         let tg_codes       = PgTelegramCodeRepository::new(db.clone());
+        let managers_repo  = PgManagerRepository::new(db.clone());
 
-        // services
         let companies = CompanyService::new(companies_repo);
         let events    = EventService::new(events_repo);
+        let managers  = ManagerService::new(managers_repo);
+        let users     = UsersService::new(users_repo.clone()); // ← users-service
 
-        // jwt / auth
         let token_service = TokenService::new(TokenConfig::from_env());
         let auth          = AuthState { token_service: token_service.clone() };
 
-        // telegram
         let telegram = TelegramService::new(tg_links, tg_codes, config.telegram_code_ttl);
 
-        // auth service (нужен UserRepository + TokenService)
         let auth_service = AuthService::new(users_repo, token_service);
 
-        let managers_repo = PgManagerRepository::new(db.clone());
-        let managers = ManagerService::new(managers_repo);
-        
         Ok(Self {
             db,
             config: Arc::new(config),
             companies,
             managers,
             events,
+            users,
             telegram,
             auth,
             auth_service,
