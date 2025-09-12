@@ -28,14 +28,10 @@ struct ListQ {
 
 pub fn router(state: AppState) -> Router {
     Router::new()
-        // Публичный список (только активные)
         .route("/api/v1/companies", get(list_companies).post(create_company))
-        // Админский список (декан видит archived при include_archived=true)
         .route("/api/v1/companies/admin", get(list_companies_admin))
-        // CRUD + статус
         .route("/api/v1/companies/:id", get(get_company).patch(update_company))
         .route("/api/v1/companies/:id/status/:status", post(set_company_status))
-        // менеджеры компании
         .route("/api/v1/companies/:id/managers", get(get_company_managers))
         .route(
             "/api/v1/companies/:id/managers/:user_id/status/:status",
