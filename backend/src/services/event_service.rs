@@ -21,7 +21,6 @@ impl<R: EventRepository + Send + Sync + 'static> EventService<R> {
         Ok(rows.into_iter().map(EventOut::from).collect())
     }
 
-    /// Создание события с явным контекстом менеджера/компании
     pub async fn create(&self, body: CreateEventIn, company_id: Uuid, manager_id: Uuid) -> ApiResult<EventOut> {
         let d = Event::new(
             Uuid::new_v4(),
@@ -108,5 +107,15 @@ impl<R: EventRepository + Send + Sync + 'static> EventService<R> {
     pub async fn cancel_registration(&self, event_id: Uuid, student_id: Uuid) -> ApiResult<()> {
         self.repo.cancel_registration(event_id, student_id, OffsetDateTime::now_utc()).await?;
         Ok(())
+    }
+
+    pub async fn list_events_for_student(&self, student_id: Uuid) -> ApiResult<Vec<EventOut>> {
+        let regs = self.repo.list_registrations_by_student(student_id).await?;
+        let mut out = Vec::new();
+        for r in regs {
+            let e = self.repo.get(r.event_id).await?;
+            out.push(EventOut::from(e));
+        }
+        Ok(out)
     }
 }
