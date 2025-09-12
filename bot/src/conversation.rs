@@ -542,18 +542,19 @@ pub async fn handle_message(bot: Bot, msg: Message, d: MyDialogue, app: Arc<App>
             }
             "Студенты ивента" => {
                 match api::manager_list_event_students(&app, &token, event_id).await {
-                    Ok(val) => {
-                        let mut lines = vec!["Записавшиеся:".to_string()];
-                        if let Some(arr) = val.as_array() {
-                            for r in arr {
-                                let sid  = r.get("student_id").and_then(|x| x.as_str()).unwrap_or("-");
-                                let when = r.get("registered_at").and_then(|x| x.as_str()).unwrap_or("-");
-                                lines.push(format!("{sid} — {when}"));
+                    Ok(regs) => {
+                        if regs.is_empty() {
+                            bot.send_message(chat_id, "Пока никто не записался.").await?;
+                        } else {
+                            let mut lines = vec!["Записавшиеся:".to_string()];
+                            for r in regs {
+                                lines.push(format!("{} <{}> — {}", r.student_name, r.student_email, r.registered_at));
                             }
+                            bot.send_message(chat_id, lines.join("\n")).await?;
                         }
-                        bot.send_message(chat_id, lines.join("\n"))
-                            .reply_markup(manager_event_menu_keyboard())
-                            .await?;
+                    }
+                    Err(e) => {
+                        bot.send_message(chat_id, format!("Не удалось загрузить список: {e}")).await?;
                     }
                     Err(e) => {
                         bot.send_message(chat_id, format!("Не удалось загрузить список: {e}"))

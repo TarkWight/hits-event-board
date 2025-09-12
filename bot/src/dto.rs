@@ -56,9 +56,18 @@ pub struct MeOut {
 pub struct EventShort {
     pub id: Uuid,
     pub title: String,
-    pub starts_at: String,   // ISO
+    pub starts_at: String,             // ISO
     pub is_published: bool,
     pub capacity: Option<i32>,
-    pub registered_count: Option<i32>,
+    pub registered_count: Option<i64>,
     // is_registered
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct RegistrationEntry {
+    pub student_id: Uuid,
+    pub student_name: String,
+    pub student_email: String,
+    pub registered_at: String, // ISO
 }

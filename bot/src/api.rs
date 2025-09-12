@@ -243,17 +243,23 @@ pub async fn manager_set_manager_status(app: &Arc<App>, token: &str, company_id:
     Ok(())
 }
 
-pub async fn manager_list_event_students(app: &Arc<App>, token: &str, event_id: Uuid) -> Result<serde_json::Value> {
-    let url = format!("{}/api/v1/events/{event_id}/registrations", app.base_url);
-    println!("[bot][api] -> GET {url}");
-    let resp = app.http.get(&url).bearer_auth(token).send().await?;
+pub async fn manager_list_event_students(
+    app: &Arc<App>,
+    access_token: &str,
+    event_id: Uuid,
+) -> Result<Vec<dto::RegistrationEntry>> {
+    let url = format!("{}/api/v1/events/{}/registrations", app.base_url, event_id);
+    let resp = app.http.get(&url).bearer_auth(access_token).send().await?;
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
-    println!("[bot][api] <- status={status}");
+
     if !status.is_success() {
-        return Err(anyhow!("HTTP {}: {}", status, extract_err_message(&text)));
+        return Err(anyhow::anyhow!("HTTP {}: {}", status, extract_err_message(&text)));
     }
-    Ok(serde_json::from_str(&text)?)
+
+    let regs: Vec<dto::RegistrationEntry> =
+        serde_json::from_str(&text).map_err(|e| anyhow::anyhow!("decode registrations: {e}"))?;
+    Ok(regs)
 }
 
 
