@@ -76,10 +76,19 @@ impl<R: EventRepository + Send + Sync + 'static> EventService<R> {
         Ok(self.repo.set_deadline(id, deadline).await?.into())
     }
 
-    pub async fn list_registrations(&self, event_id: Uuid) -> ApiResult<Vec<crate::routes::events::RegistrationOut>> {
+    pub async fn list_registrations(
+        &self,
+        event_id: Uuid,
+    ) -> ApiResult<Vec<crate::routes::events::RegistrationOut>> {
         let regs = self.repo.list_registrations(event_id).await?;
-        Ok(regs.into_iter()
-            .map(|(student_id, registered_at)| crate::routes::events::RegistrationOut { student_id, registered_at })
+        Ok(regs
+            .into_iter()
+            .map(|r| crate::routes::events::RegistrationOut {
+                student_id:     r.student_id,
+                student_name:   r.student_name,
+                student_email:  r.student_email,
+                registered_at:  r.registered_at,
+            })
             .collect())
     }
 

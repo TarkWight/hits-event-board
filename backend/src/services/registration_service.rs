@@ -38,6 +38,8 @@ impl From<RegistrationRow> for RegistrationOut {
         Self {
             student_id: r.student_id,
             registered_at: r.registered_at,
+            student_name: r.student_name,
+            student_email: r.student_email,
         }
     }
 }

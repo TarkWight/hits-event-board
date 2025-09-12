@@ -10,6 +10,14 @@ function setTab(hash){
     else document.getElementById('page-companies').classList.remove('hidden');
 }
 
+function escapeHtml(s){
+    return String(s ?? '')
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'",'&#39;');
+}
 
 async function loadMe(){
     const r = await api('/api/v1/me');
@@ -149,17 +157,29 @@ async function unpublishEvent(id){
     const r = await api(`/api/v1/events/${id}/unpublish`, {method:'POST'});
     if(r.ok) loadEvents();
 }
-
 async function viewRegistrations(eventId, title){
     const r = await api(`/api/v1/events/${eventId}/registrations`);
     const regs = r.ok ? await r.json() : [];
-    const rows = regs.map(x=>`<tr><td>${x.student_id}</td><td>${new Date(x.registered_at).toLocaleString()}</td></tr>`);
+
+    const rows = regs.map(x=>{
+        const name  = x.student_name  ?? x.studentName  ?? x.student_id ?? x.studentId ?? '—';
+        const email = x.student_email ?? x.studentEmail ?? '';
+        const when  = new Date(x.registered_at ?? x.registeredAt).toLocaleString();
+
+        return `<tr>
+          <td>${escapeHtml(name)}${email ? `<br/><span class="badge">${escapeHtml(email)}</span>` : ''}</td>
+          <td>${escapeHtml(when)}</td>
+        </tr>`;
+    });
+
     document.getElementById('eventsTableWrap').innerHTML =
         `<div class="card">
-      <div class="toolbar"><strong>Записавшиеся: ${title}</strong>
-        <button class="right" onclick="loadEvents()">← назад</button></div>
-      ${table(['student_id','когда'], rows)}
-    </div>`;
+          <div class="toolbar">
+            <strong>Записавшиеся: ${escapeHtml(title)}</strong>
+            <button class="right" onclick="loadEvents()">← назад</button>
+          </div>
+          ${table(['Студент','Когда'], rows)}
+        </div>`;
 }
 
 // ---- Лист ожидания ----

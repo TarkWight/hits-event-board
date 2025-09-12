@@ -87,9 +87,16 @@ impl RegistrationRepository for PgRegistrationRepository {
         if let Some(existing) = sqlx::query_as!(
             RegistrationRow,
             r#"
-            SELECT event_id, student_id, registered_at, gcal_event_id
-            FROM registrations
-            WHERE event_id = $1 AND student_id = $2 AND status = 'registered'
+            SELECT
+              r.event_id,
+              r.student_id,
+              u.name  AS student_name,
+              u.email AS student_email,
+              r.registered_at,
+              r.gcal_event_id
+            FROM registrations r
+            JOIN users u ON u.id = r.student_id
+            WHERE r.event_id = $1 AND r.student_id = $2 AND r.status = 'registered'
             "#,
             event_id, student_id
         )
@@ -120,12 +127,23 @@ impl RegistrationRepository for PgRegistrationRepository {
         let row = sqlx::query_as!(
             RegistrationRow,
             r#"
-            INSERT INTO registrations (event_id, student_id, status, registered_at)
-            VALUES ($1, $2, 'registered', $3)
-            ON CONFLICT (event_id, student_id) DO UPDATE
-              SET status = 'registered',
-                  canceled_at = NULL
-            RETURNING event_id, student_id, registered_at, gcal_event_id
+            WITH upsert AS (
+              INSERT INTO registrations (event_id, student_id, status, registered_at)
+              VALUES ($1, $2, 'registered', $3)
+              ON CONFLICT (event_id, student_id) DO UPDATE
+                SET status = 'registered',
+                    canceled_at = NULL
+              RETURNING event_id, student_id, registered_at, gcal_event_id
+            )
+            SELECT
+              upsert.event_id,
+              upsert.student_id,
+              u.name  AS student_name,
+              u.email AS student_email,
+              upsert.registered_at,
+              upsert.gcal_event_id
+            FROM upsert
+            JOIN users u ON u.id = upsert.student_id
             "#,
             event_id, student_id, now_utc
         )
@@ -158,10 +176,17 @@ impl RegistrationRepository for PgRegistrationRepository {
         let rows = sqlx::query_as!(
             RegistrationRow,
             r#"
-            SELECT event_id, student_id, registered_at, gcal_event_id
-            FROM registrations
-            WHERE event_id = $1 AND status = 'registered'
-            ORDER BY registered_at DESC
+            SELECT
+              r.event_id,
+              r.student_id,
+              u.name  AS student_name,
+              u.email AS student_email,
+              r.registered_at,
+              r.gcal_event_id
+            FROM registrations r
+            JOIN users u ON u.id = r.student_id
+            WHERE r.event_id = $1 AND r.status = 'registered'
+            ORDER BY r.registered_at DESC
             "#,
             event_id
         )
