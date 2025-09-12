@@ -27,7 +27,7 @@ pub trait EventRepository {
     async fn delete(&self, id: Uuid) -> RepoResult<()>;
     async fn set_published(&self, id: Uuid, flag: bool) -> RepoResult<EventWithCount>;
     async fn set_deadline(&self, id: Uuid, deadline: Option<OffsetDateTime>) -> RepoResult<EventWithCount>;
-    async fn list_registrations(&self, event_id: Uuid) -> RepoResult<Vec<(Uuid, OffsetDateTime)>>;
+    async fn list_registrations(&self, event_id: Uuid) -> RepoResult<Vec<RegistrationRow>>;
     async fn count_registrations(&self, event_id: Uuid) -> RepoResult<i64>;
     async fn register(&self, event_id: Uuid, student_id: Uuid, now_utc: OffsetDateTime) -> RepoResult<()>;
     async fn cancel_registration(&self, event_id: Uuid, student_id: Uuid, now_utc: OffsetDateTime) -> RepoResult<()>;
@@ -202,13 +202,30 @@ impl EventRepository for PgEventRepository {
         r.map(EventWithCount::from).ok_or(RepoError::NotFound)
     }
 
-    async fn list_registrations(&self, event_id: Uuid) -> RepoResult<Vec<(Uuid, OffsetDateTime)>> {
-        let rows = sqlx::query!(
-            r#"SELECT student_id, registered_at FROM registrations WHERE event_id = $1 ORDER BY registered_at DESC"#,
-            event_id
-        )
-            .fetch_all(&self.pool).await?;
-        Ok(rows.into_iter().map(|r| (r.student_id, r.registered_at)).collect())
+    async fn list_registrations(&self, event_id: Uuid) -> RepoResult<Vec<RegistrationRow>> {
+        let rows = sqlx::query_as!(
+        RegistrationRow,
+        r#"
+        SELECT
+            r.event_id,
+            r.student_id,
+            u.name  AS student_name,
+            u.email AS student_email,
+            r.registered_at,
+            r.gcal_event_id
+        FROM registrations r
+        JOIN users u ON u.id = r.student_id
+        WHERE r.event_id = $1
+          AND r.status = 'registered'
+        ORDER BY r.registered_at DESC
+        "#,
+        event_id
+    )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(RepoError::Db)?;
+
+        Ok(rows)
     }
 
     async fn count_registrations(&self, event_id: Uuid) -> RepoResult<i64> {
@@ -244,21 +261,32 @@ impl EventRepository for PgEventRepository {
         if res.rows_affected() == 0 { return Err(RepoError::NotFound); }
         Ok(())
     }
-
-    async fn list_registrations_by_student(&self, student_id: Uuid) -> RepoResult<Vec<RegistrationRow>> {
+    async fn list_registrations_by_student(
+        &self,
+        event_id: Uuid,
+    ) -> RepoResult<Vec<RegistrationRow>> {
         let rows = sqlx::query_as!(
-        RegistrationRow,
-        r#"
-        SELECT event_id, student_id, registered_at, NULL as gcal_event_id
-        FROM registrations
-        WHERE student_id = $1
-        ORDER BY registered_at DESC
-        "#,
-        student_id
-    )
+            RegistrationRow,
+            r#"
+            SELECT
+              r.event_id,
+              r.student_id,
+              u.name  AS student_name,
+              u.email AS student_email,
+              r.registered_at,
+              NULL::text AS gcal_event_id
+            FROM registrations r
+            JOIN users u ON u.id = r.student_id
+            WHERE r.event_id = $1
+            ORDER BY r.registered_at DESC
+            "#,
+            event_id
+        )
             .fetch_all(&self.pool)
             .await
             .map_err(RepoError::Db)?;
+
         Ok(rows)
     }
+
 }

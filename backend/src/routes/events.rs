@@ -4,12 +4,13 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::state::AppState;
 use crate::api::models::event::EventOut;
+pub(crate) use crate::api::models::registration::RegistrationOut;
 use crate::api::requests::event::{CreateEventIn, UpdateEventIn};
 use crate::infra::repositories::event_repo::EventListFilter;
 use crate::infra::security::rbac;
@@ -52,11 +53,17 @@ struct DeadlineIn {
     deadline: Option<OffsetDateTime>,
 }
 
-#[derive(serde::Serialize)]
-pub struct RegistrationOut {
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RegistrationRow {
+    pub event_id: Uuid,
     pub student_id: Uuid,
+    pub student_name: String,
+    pub student_email: String,
     #[serde(with = "time::serde::rfc3339")]
     pub registered_at: OffsetDateTime,
+    pub gcal_event_id: Option<String>,
 }
 
 async fn list_events(State(st): State<AppState>, user: Option<AuthUser>, q: Query<ListQ>)
