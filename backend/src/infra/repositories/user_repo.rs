@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sqlx::{Pool, Postgres, FromRow};
+use sqlx::{Pool, Postgres};
 use time::OffsetDateTime;
 use uuid::Uuid;
 use crate::auth::roles::{ManagerStatus, UserRole, StudentStatus};
@@ -18,10 +18,12 @@ pub trait UserRepository {
     ) -> RepoResult<UserRow>;
 
     async fn find_by_email(&self, email: &str) -> RepoResult<UserRow>;
-    async fn find_by_refresh_token(&self, refresh_hash: &str, now: time::OffsetDateTime)
+    async fn find_by_refresh_token(&self, refresh_hash: &str, now: OffsetDateTime)
         -> RepoResult<UserRow>;
     async fn approve_user(&self, user_id: Uuid, approver_id: Uuid) -> RepoResult<()>;
     async fn create_student(&self, name: &str, email: &str, password_hash: &str)
+        -> RepoResult<UserRow>;
+    async fn create_manager(&self, name: &str, email: &str, password_hash: &str, company_id: Uuid)
         -> RepoResult<UserRow>;
     async fn set_refresh_token(&self, user_id: Uuid, refresh_hash: &str, expires_at: OffsetDateTime)
         -> RepoResult<()>;
@@ -96,6 +98,33 @@ impl UserRepository for PgUserRepository {
         u.ok_or(RepoError::NotFound)
     }
 
+    async fn find_by_refresh_token(
+        &self,
+        refresh_hash: &str,
+        now: OffsetDateTime,
+    ) -> RepoResult<UserRow> {
+        let u = sqlx::query_as!(
+            UserRow,
+            r#"
+            SELECT
+                id,
+                name,
+                email::text as "email!",
+                password_hash,
+                role as "role: UserRole"
+            FROM users
+            WHERE refresh_token_hash = $1
+              AND refresh_token_expiration > $2
+            "#,
+            refresh_hash,
+            now
+        )
+            .fetch_optional(&self.pool)
+            .await?;
+
+        u.ok_or(RepoError::NotFound)
+    }
+
     async fn approve_user(&self, user_id: Uuid, _approver_id: Uuid) -> RepoResult<()> {
         let res = sqlx::query!(
             r#"
@@ -160,6 +189,52 @@ impl UserRepository for PgUserRepository {
         Ok(user)
     }
 
+    async fn create_manager(
+        &self,
+        name: &str,
+        email: &str,
+        password_hash: &str,
+        company_id: Uuid,
+    ) -> RepoResult<UserRow> {
+        let mut tx = self.pool.begin().await?;
+
+        let user = sqlx::query_as!(
+            UserRow,
+            r#"
+            INSERT INTO users (id, name, email, password_hash, role)
+            VALUES ($1, $2, $3, $4, 'manager')
+            RETURNING
+                id,
+                name,
+                email::text as "email!",
+                password_hash,
+                role as "role: crate::auth::roles::UserRole"
+            "#,
+            Uuid::new_v4(),
+            name,
+            email,
+            password_hash
+        )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(RepoError::Db)?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO managers (user_id, company_id, status)
+            VALUES ($1, $2, 'pending')
+            "#,
+            user.id,
+            company_id
+        )
+            .execute(&mut *tx)
+            .await
+            .map_err(RepoError::Db)?;
+
+        tx.commit().await?;
+        Ok(user)
+    }
+
     async fn set_refresh_token(
         &self,
         user_id: Uuid,
@@ -208,7 +283,7 @@ impl UserRepository for PgUserRepository {
         u.ok_or(RepoError::NotFound)
     }
 
-    async fn student_status(&self, user_id: Uuid) -> RepoResult<Option<crate::auth::roles::StudentStatus>> {
+    async fn student_status(&self, user_id: Uuid) -> RepoResult<Option<StudentStatus>> {
 
         let row = sqlx::query!(
             r#"
@@ -224,7 +299,7 @@ impl UserRepository for PgUserRepository {
         Ok(row.map(|r| r.status))
     }
 
-    async fn manager_info(&self, user_id: Uuid) -> RepoResult<Option<(crate::auth::roles::ManagerStatus, Uuid)>> {
+    async fn manager_info(&self, user_id: Uuid) -> RepoResult<Option<(ManagerStatus, Uuid)>> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -240,32 +315,5 @@ impl UserRepository for PgUserRepository {
             .await?;
 
         Ok(row.map(|r| (r.status, r.company_id)))
-    }
-
-    async fn find_by_refresh_token(
-        &self,
-        refresh_hash: &str,
-        now: time::OffsetDateTime,
-    ) -> RepoResult<UserRow> {
-        let u = sqlx::query_as!(
-            UserRow,
-            r#"
-            SELECT
-                id,
-                name,
-                email::text as "email!",
-                password_hash,
-                role as "role: UserRole"
-            FROM users
-            WHERE refresh_token_hash = $1
-              AND refresh_token_expiration > $2
-            "#,
-            refresh_hash,
-            now
-        )
-            .fetch_optional(&self.pool)
-            .await?;
-
-        u.ok_or(RepoError::NotFound)
     }
 }

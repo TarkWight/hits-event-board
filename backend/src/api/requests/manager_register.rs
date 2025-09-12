@@ -6,5 +6,5 @@ pub struct ManagerRegisterRequest {
     pub name: String,
     pub email: String,
     pub password: String,
-    pub id_company: Uuid,
+    pub company_id: Uuid,
 }

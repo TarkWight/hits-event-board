@@ -1,4 +1,3 @@
-// Хранилище токенов
 function saveTokens(t) {
     localStorage.setItem('accessToken', t.access_token);
     localStorage.setItem('accessExp', t.access_token_expiration);
@@ -15,7 +14,6 @@ function getAccessToken() {
     return localStorage.getItem('accessToken');
 }
 
-// Универсальный fetch через прокси с логами
 async function api(url, { method='GET', body=null, requireAuth=true, headers={} } = {}) {
     const h = {'Content-Type':'application/json', ...headers};
     if (requireAuth) {
@@ -26,7 +24,6 @@ async function api(url, { method='GET', body=null, requireAuth=true, headers={} 
     return fetch(url, { method, headers:h, body });
 }
 
-// Утилиты рендера
 function table(headers, rowsHtml) {
     return `
     <table>
