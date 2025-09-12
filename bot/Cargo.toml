@@ -1,0 +1,18 @@
+[package]
+name = "bot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow   = "1"
+dotenvy  = "0.15"
+teloxide = { version = "0.17.0", features = ["macros"] }
+tokio    = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+reqwest  = { version = "0.12", features = ["json", "gzip"] }
+serde    = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+time     = { version = "0.3", features = ["serde", "parsing", "formatting"] }
+uuid     = { version = "1.8", features = ["serde", "v4"] }
+pretty_env_logger = "0.5"
+log = "0.4"
+urlencoding = "2.1.3"

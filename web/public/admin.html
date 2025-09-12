@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8"/>
+    <title>Админка</title>
+    <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<div class="container">
+    <div class="toolbar">
+        <h1>Админка</h1>
+        <div class="right row">
+            <span id="meBadge" class="badge"></span>
+            <button id="btnLogout">Выйти</button>
+        </div>
+    </div>
+
+    <nav class="tabs">
+        <a href="#companies" class="tab active">Компании</a>
+        <a href="#events" class="tab">Ивенты</a>
+        <a href="#queue" class="tab">Лист ожидания</a>
+    </nav>
+
+    <!-- Компании -->
+    <section id="page-companies" class="">
+        <div class="card">
+            <div class="toolbar">
+                <strong>Компании</strong>
+                <div class="row">
+                    <label><input type="checkbox" id="incArchived"/> Показывать архивные</label>
+                    <input type="text" id="companySearch" placeholder="поиск по названию"/>
+                    <button id="btnReloadCompanies">Обновить</button>
+                    <button id="btnNewCompany" class="primary">Создать компанию</button>
+                </div>
+            </div>
+            <div id="companiesTableWrap"></div>
+        </div>
+    </section>
+
+    <!-- Ивенты -->
+    <section id="page-events" class="hidden">
+        <div class="card">
+            <div class="toolbar">
+                <strong>Ивенты</strong>
+                <div class="row">
+                    <select id="filterCompany"></select>
+                    <select id="filterPublished">
+                        <option value="">все</option>
+                        <option value="true">опубликованные</option>
+                        <option value="false">черновики</option>
+                    </select>
+                    <button id="btnReloadEvents">Обновить</button>
+                </div>
+            </div>
+            <div id="eventsTableWrap"></div>
+        </div>
+    </section>
+
+    <!-- Лист ожидания -->
+    <section id="page-queue" class="hidden">
+        <div class="card">
+            <div class="toolbar">
+                <strong>Лист ожидания</strong>
+                <span class="badge warn">пока собираем через существующие эндпоинты</span>
+            </div>
+            <div class="row">
+                <div class="card" style="flex:1; min-width:320px;">
+                    <strong>Менеджеры (pending)</strong>
+                    <div id="pendingManagersWrap"></div>
+                </div>
+                <div class="card" style="flex:1; min-width:320px;">
+                    <strong>Студенты (pending)</strong>
+                    <div id="pendingStudentsWrap"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <pre id="debug" class="hidden"></pre>
+</div>
+
+<script src="/app.js"></script>
+<script src="/admin.js"></script>
+</body>
+</html>
