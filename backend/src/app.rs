@@ -12,8 +12,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(routes::auth::router(state.clone()))
         .merge(routes::me::router(state.clone()))
         .merge(routes::oauth::router(state.clone()))
-        // .merge(routes::users::router(state.clone())) // включим, когда добавим UserService в AppState
-        // .merge(routes::managers::router(state.clone()))
+        .merge(routes::dean_student::router(state.clone()))
         .merge(routes::companies::router(state.clone()))
         .merge(routes::events::router(state.clone()))
         .merge(routes::telegram::router(state.clone()))
