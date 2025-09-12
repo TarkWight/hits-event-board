@@ -30,6 +30,10 @@ pub trait UserRepository {
     async fn find_by_id(&self, id: Uuid) -> RepoResult<UserRow>;
     async fn student_status(&self, user_id: Uuid) -> RepoResult<Option<StudentStatus>>;
     async fn manager_info(&self, user_id: Uuid) -> RepoResult<Option<(ManagerStatus, Uuid)>>;
+    async fn list_students_by_status(&self, statuses: &[StudentStatus], page: i32, limit: i32, search: &str)
+        -> RepoResult<Vec<(UserRow, Option<StudentStatus>)>>;
+
+    async fn set_student_status(&self, user_id: Uuid, status: StudentStatus) -> RepoResult<()>;
 }
 
 #[derive(Clone)]
@@ -287,7 +291,7 @@ impl UserRepository for PgUserRepository {
 
         let row = sqlx::query!(
             r#"
-            SELECT status as "status: crate::auth::roles::StudentStatus"
+            SELECT status as "status: StudentStatus"
             FROM students
             WHERE user_id = $1
             "#,
@@ -315,5 +319,102 @@ impl UserRepository for PgUserRepository {
             .await?;
 
         Ok(row.map(|r| (r.status, r.company_id)))
+    }
+
+    async fn list_students_by_status(&self, statuses: &[StudentStatus], page: i32, limit: i32, search: &str)
+        -> RepoResult<Vec<(UserRow, Option<StudentStatus>)>> {
+
+        let page = page.max(1);
+        let limit = limit.max(1);
+
+        let offset_i64: i64 = ((page - 1) * limit) as i64;
+        let limit_i64:  i64 = limit as i64;
+
+        let status_texts: Vec<String> = statuses
+            .iter()
+            .map(|s| match s {
+                StudentStatus::Created   => "created",
+                StudentStatus::Linked    => "linked",
+                StudentStatus::Confirmed => "confirmed",
+                StudentStatus::Rejected  => "rejected",
+            }.to_string())
+            .collect();
+
+        let pattern = format!("%{}%", search);
+
+        let rows = sqlx::query!(
+        r#"
+        SELECT
+          u.id,
+          u.name,
+          u.email::text as "email!",
+          u.password_hash,
+          u.role as "role: crate::auth::roles::UserRole",
+          s.status as "status: crate::auth::roles::StudentStatus"
+        FROM users u
+        JOIN students s ON s.user_id = u.id
+        WHERE u.role = 'student'
+          AND ( $1 = '' OR u.name ILIKE $2 OR u.email ILIKE $2 )
+          AND ( s.status::text = ANY($3::text[]) )
+        ORDER BY u.created_at DESC NULLS LAST, u.id
+        OFFSET $4 LIMIT $5
+        "#,
+        // $1..$5
+        search,
+        pattern,
+        &status_texts[..],
+        offset_i64,
+        limit_i64,
+    )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(RepoError::Db)?;
+
+        let list = rows
+            .into_iter()
+            .map(|r| {
+                let u = UserRow {
+                    id: r.id,
+                    name: r.name,
+                    email: r.email,
+                    password_hash: r.password_hash,
+                    role: r.role,
+                };
+                (u, Some(r.status))
+            })
+            .collect::<Vec<(UserRow, Option<StudentStatus>)>>();
+
+        Ok(list)
+    }
+
+    async fn set_student_status(
+        &self,
+        user_id: Uuid,
+        status: StudentStatus,
+    ) -> RepoResult<()> {
+        let status_text = match status {
+            StudentStatus::Created   => "created",
+            StudentStatus::Linked    => "linked",
+            StudentStatus::Confirmed => "confirmed",
+            StudentStatus::Rejected  => "rejected",
+        };
+
+        let res = sqlx::query!(
+        r#"
+        UPDATE students
+           SET status = ($2)::text::student_status
+         WHERE user_id = $1
+        "#,
+        user_id,
+        status_text,
+    )
+            .execute(&self.pool)
+            .await
+            .map_err(RepoError::Db)?;
+
+        if res.rows_affected() == 0 {
+            return Err(RepoError::NotFound);
+        }
+        Ok(())
     }
 }
