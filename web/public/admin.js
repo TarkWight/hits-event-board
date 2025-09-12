@@ -180,9 +180,47 @@ async function loadPendingManagers(){
 }
 
 async function loadPendingStudents(){
-    // Плейсхолдер: ждём эндпоинт, напр. GET /api/v1/dean/students?status=linked|created
+    // берём created+linked (ожидающие)
+    const url = `/api/v1/dean/students?status=created`; // можно дернуть и linked отдельно
+    const url2 = `/api/v1/dean/students?status=linked`;
+
+    const [r1, r2] = await Promise.all([api(url), api(url2)]);
+    const list1 = r1.ok ? await r1.json() : [];
+    const list2 = r2.ok ? await r2.json() : [];
+    const list  = [...list1, ...list2];
+
+    if (!list.length){
+        document.getElementById('pendingStudentsWrap').innerHTML =
+            `<div class="badge">Нет заявок студентов</div>`;
+        return;
+    }
+
+    const rows = list.map(s => {
+        const statusBadgeCls = s.status === 'linked' ? 'warn' : 'warn';
+        return `<tr>
+          <td>${s.name}<br/><span class="badge">${s.email}</span></td>
+          <td>${badge(s.status, statusBadgeCls)}</td>
+          <td class="row">
+            <button onclick="approveStudent('${s.id}')">подтвердить</button>
+            <button onclick="rejectStudent('${s.id}')">отклонить</button>
+          </td>
+        </tr>`;
+    });
+
     document.getElementById('pendingStudentsWrap').innerHTML =
-        `<div class="badge">Добавь эндпоинт для студентов в ожидании, и я подцеплю тут</div>`;
+        table(['Студент','Статус','Действия'], rows);
+}
+
+async function approveStudent(userId){
+    const r = await api(`/api/v1/dean/students/${userId}/approve`, { method: 'POST' });
+    if (r.ok) loadPendingStudents();
+    else alert('Не удалось подтвердить студента');
+}
+
+async function rejectStudent(userId){
+    const r = await api(`/api/v1/dean/students/${userId}/reject`, { method: 'POST' });
+    if (r.ok) loadPendingStudents();
+    else alert('Не удалось отклонить студента');
 }
 
 // ---- Навешиваем события и грузим данные ----
